@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+title: "Celltaminate: A Bioinformatic Pipeline for Rapid Detection of Pathogenic Microorganisms"
+message: "Please cite the Celltaminate manuscript or this repository when using this software."
+type: software
+version: "0.1.0"
+authors:
+  - family-names: Sirajee
+    given-names: Ahmad Salman
+  - family-names: Ghaddar
+    given-names: Bassel
+  - family-names: De
+    given-names: Subhajyoti
+repository-code: "https://github.com/<organization>/Celltaminate"
+abstract: "Celltaminate is a command-line and Shiny application for contamination-aware prioritization of microbial taxa from host-dominated sequencing data using Kraken2 or KrakenUniq taxonomic reports."
+keywords:
+  - metagenomics
+  - microbiome
+  - contamination
+  - Kraken2
+  - KrakenUniq
+  - pathogen detection
+  - nanopore sequencing
+license: "NOASSERTION"

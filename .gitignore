@@ -1,0 +1,33 @@
+# R and Python temporary files
+.Rhistory
+.RData
+.Rproj.user/
+__pycache__/
+*.pyc
+
+# Celltaminate outputs
+celltaminate_results/
+results/
+*/results/
+run_config/
+cleaned_reports/
+cleaned_reanalysis/
+
+# Large local reference files
+data/reference/refined_cell.lines.tsv
+refined_cell.lines.tsv
+
+# Private data and local paths
+local/
+*.bam
+*.fastq
+*.fastq.gz
+*.fq
+*.fq.gz
+*.sam
+*.cram
+
+# System files
+.DS_Store
+Thumbs.db
+data/reference/refined_cell.lines.tsv.gz

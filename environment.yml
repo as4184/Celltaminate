@@ -1,0 +1,22 @@
+name: celltaminate
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - python>=3.9
+  - r-base>=4.2
+  - r-dplyr
+  - r-ggplot2
+  - r-ggrepel
+  - r-fmsb
+  - r-writexl
+  - r-tibble
+  - r-tidyr
+  - r-shiny
+  - r-shinywidgets
+  - r-dt
+  - r-httr
+  - r-jsonlite
+  - r-zip
+  - r-xml2

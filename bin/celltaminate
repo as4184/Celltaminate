@@ -1,0 +1,363 @@
+#!/usr/bin/env python3
+"""
+Generic command-line wrapper for Celltaminate.
+
+This wrapper intentionally avoids cluster-specific paths and scheduler-specific logic.
+It validates user inputs, writes a run manifest, and calls the R command-line workflow.
+"""
+
+from __future__ import annotations
+
+import argparse
+import csv
+import os
+import shutil
+import subprocess
+import sys
+import urllib.error
+import urllib.request
+from pathlib import Path
+from typing import Iterable, List, Optional
+
+VERSION = "0.1.0"
+REFERENCE_DOI = "10.5281/zenodo.20560460"
+REFERENCE_URL = "https://zenodo.org/records/20560460/files/refined_cell.lines.tsv?download=1"
+
+
+def repo_root() -> Path:
+    return Path(__file__).resolve().parents[1]
+
+
+def default_rscript() -> str:
+    return os.environ.get("RSCRIPT", "Rscript")
+
+
+def existing_file(path: str, label: str) -> Path:
+    p = Path(path).expanduser().resolve()
+    if not p.exists() or not p.is_file():
+        raise SystemExit(f"ERROR: {label} not found: {p}")
+    return p
+
+
+def existing_optional_file(path: Optional[str], label: str) -> Optional[Path]:
+    if path is None or str(path).strip() == "":
+        return None
+    return existing_file(str(path), label)
+
+
+def str_bool(value: bool) -> str:
+    return "TRUE" if value else "FALSE"
+
+
+def read_input_list(input_list: Path) -> List[Path]:
+    reports: List[Path] = []
+    with input_list.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            p = Path(line).expanduser()
+            if not p.is_absolute():
+                p = (input_list.parent / p).resolve()
+            else:
+                p = p.resolve()
+            reports.append(p)
+    if not reports:
+        raise SystemExit(f"ERROR: input list contains no report paths: {input_list}")
+    return reports
+
+
+def validate_metadata(metadata: Optional[Path], report_basenames: Iterable[str]) -> None:
+    if metadata is None:
+        return
+    required = {"sample", "group", "sample_type", "is_control"}
+    with metadata.open("r", encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(handle, delimiter="\t")
+        if reader.fieldnames is None:
+            raise SystemExit(f"ERROR: metadata file has no header: {metadata}")
+        missing = required.difference(reader.fieldnames)
+        if missing:
+            raise SystemExit(
+                f"ERROR: metadata is missing required columns: {', '.join(sorted(missing))}\n"
+                f"Expected columns: sample, group, sample_type, is_control"
+            )
+        samples = [row.get("sample", "").strip() for row in reader if row.get("sample", "").strip()]
+    unknown = sorted(set(samples).difference(set(report_basenames)))
+    if unknown:
+        sys.stderr.write(
+            "WARNING: metadata contains sample names that do not match the report basenames and will be ignored by Celltaminate:\n"
+            + "\n".join(f"  - {x}" for x in unknown)
+            + "\n"
+        )
+
+
+def bundled_panel(filename: str) -> Optional[Path]:
+    p = repo_root() / "data" / "panels" / filename
+    return p if p.exists() else None
+
+
+def bundled_reference_example() -> Optional[Path]:
+    p = repo_root() / "data" / "reference" / "refined_cell.lines.example.tsv"
+    return p if p.exists() else None
+
+
+def write_absolute_input_list(outdir: Path, reports: List[Path]) -> Path:
+    run_cfg = outdir / "run_config"
+    run_cfg.mkdir(parents=True, exist_ok=True)
+    input_list = run_cfg / "input_list.absolute.txt"
+    with input_list.open("w", encoding="utf-8") as handle:
+        for report in reports:
+            handle.write(str(report) + "\n")
+    return input_list
+
+
+def build_r_command(args: argparse.Namespace, input_list: Path) -> List[str]:
+    script = repo_root() / "scripts" / "Celltaminate.R"
+    if not script.exists():
+        raise SystemExit(f"ERROR: Celltaminate R script not found: {script}")
+
+    cmd = [
+        args.rscript,
+        "--vanilla",
+        str(script),
+        "--input_list",
+        str(input_list),
+        "--output_dir",
+        str(args.outdir),
+        "--tax_level",
+        args.tax_level,
+        "--host_species",
+        args.host_species,
+        "--include_protozoa",
+        str_bool(args.include_protozoa),
+        "--collapse_species",
+        str_bool(args.collapse_species),
+        "--collapse_min_genus_reads",
+        str(args.collapse_min_genus_reads),
+        "--collapse_top_frac",
+        str(args.collapse_top_frac),
+        "--fp_falsepos_cutoff",
+        str(args.fp_falsepos_cutoff),
+        "--fp_true_cutoff",
+        str(args.fp_true_cutoff),
+        "--fp_aggressiveness",
+        str(args.fp_aggressiveness),
+        "--quick_remove",
+        args.quick_remove,
+        "--keep_descendants",
+        str_bool(args.keep_descendants),
+        "--show_fp_breakdown",
+        str_bool(args.show_fp_breakdown),
+        "--save_cleaned_reanalysis",
+        str_bool(args.save_cleaned_reanalysis),
+    ]
+
+    if args.metadata is not None:
+        cmd += ["--metadata_tsv", str(args.metadata)]
+    if args.ref_bg_tsv is not None:
+        cmd += ["--ref_bg_tsv", str(args.ref_bg_tsv)]
+    if args.kitome_blacklist_tsv is not None:
+        cmd += ["--kitome_blacklist_tsv", str(args.kitome_blacklist_tsv)]
+    if args.clinical_panel_tsv is not None:
+        cmd += ["--clinical_panel_tsv", str(args.clinical_panel_tsv)]
+    if args.protected_taxa_tsv is not None:
+        cmd += ["--protected_taxa_tsv", str(args.protected_taxa_tsv)]
+    if args.host_taxids_manual:
+        cmd += ["--host_taxids_manual", args.host_taxids_manual]
+
+    return cmd
+
+
+def run_command(cmd: List[str], dry_run: bool = False) -> int:
+    print("Running command:")
+    print(" ".join(shlex_quote(x) for x in cmd))
+    if dry_run:
+        return 0
+    return subprocess.call(cmd)
+
+
+def shlex_quote(value: str) -> str:
+    import shlex
+    return shlex.quote(str(value))
+
+
+def cmd_run(parsed: argparse.Namespace) -> int:
+    reports: List[Path] = []
+    if parsed.reports:
+        reports.extend(existing_file(p, "Kraken/KrakenUniq report") for p in parsed.reports)
+    if parsed.input_list:
+        input_list = existing_file(parsed.input_list, "input list")
+        reports.extend(read_input_list(input_list))
+
+    # Deduplicate while preserving order.
+    seen = set()
+    reports_unique: List[Path] = []
+    for report in reports:
+        rp = str(report.resolve())
+        if rp not in seen:
+            seen.add(rp)
+            reports_unique.append(report.resolve())
+
+    if not reports_unique:
+        raise SystemExit("ERROR: provide at least one report using --reports or --input-list")
+
+    missing = [p for p in reports_unique if not p.exists()]
+    if missing:
+        raise SystemExit("ERROR: these report files do not exist:\n" + "\n".join(str(x) for x in missing))
+
+    parsed.outdir = Path(parsed.outdir).expanduser().resolve()
+    parsed.outdir.mkdir(parents=True, exist_ok=True)
+
+    parsed.metadata = existing_optional_file(parsed.metadata, "metadata TSV")
+    parsed.ref_bg_tsv = existing_optional_file(parsed.ref_bg_tsv, "reference background TSV")
+    parsed.protected_taxa_tsv = existing_optional_file(parsed.protected_taxa_tsv, "protected taxa TSV")
+
+    if parsed.kitome_blacklist_tsv is None:
+        parsed.kitome_blacklist_tsv = bundled_panel("kitome_and_background_blacklist.tsv")
+    else:
+        parsed.kitome_blacklist_tsv = existing_file(parsed.kitome_blacklist_tsv, "kitome blacklist TSV")
+
+    if parsed.clinical_panel_tsv is None:
+        parsed.clinical_panel_tsv = bundled_panel("clinically_important_pathogens.tsv")
+    else:
+        parsed.clinical_panel_tsv = existing_file(parsed.clinical_panel_tsv, "clinical panel TSV")
+
+    if parsed.use_example_reference and parsed.ref_bg_tsv is None:
+        parsed.ref_bg_tsv = bundled_reference_example()
+        if parsed.ref_bg_tsv is None:
+            raise SystemExit("ERROR: bundled example reference table was not found")
+
+    validate_metadata(parsed.metadata, [p.name for p in reports_unique])
+    absolute_input_list = write_absolute_input_list(parsed.outdir, reports_unique)
+
+    cmd = build_r_command(parsed, absolute_input_list)
+    rc = run_command(cmd, dry_run=parsed.dry_run)
+    if rc != 0:
+        raise SystemExit(rc)
+    return 0
+
+
+def cmd_app(parsed: argparse.Namespace) -> int:
+    app_script = repo_root() / "app" / "Celltaminate_app.R"
+    if not app_script.exists():
+        raise SystemExit(f"ERROR: Shiny app script not found: {app_script}")
+    rscript = parsed.rscript
+    cmd = [rscript, "--vanilla", str(app_script)]
+    return run_command(cmd, dry_run=parsed.dry_run)
+
+
+def cmd_init(parsed: argparse.Namespace) -> int:
+    outdir = Path(parsed.outdir).expanduser().resolve()
+    outdir.mkdir(parents=True, exist_ok=True)
+    (outdir / "input_list.txt").write_text("sample1.kraken.report.txt\n", encoding="utf-8")
+    (outdir / "metadata.tsv").write_text(
+        "sample\tgroup\tsample_type\tis_control\n"
+        "sample1.kraken.report.txt\tGroup 1\tClinical / sterile\tFALSE\n",
+        encoding="utf-8",
+    )
+    print(f"Wrote template files to: {outdir}")
+    return 0
+
+
+
+def cmd_download_reference(parsed: argparse.Namespace) -> int:
+    out = Path(parsed.out).expanduser().resolve()
+    out.parent.mkdir(parents=True, exist_ok=True)
+    tmp = out.with_suffix(out.suffix + ".tmp")
+    request = urllib.request.Request(parsed.url, headers={"User-Agent": "Celltaminate reference downloader"})
+
+    print(f"Downloading reference background table from DOI {REFERENCE_DOI}")
+    print(f"Output: {out}")
+
+    if out.exists() and not parsed.force:
+        raise SystemExit(f"ERROR: output already exists: {out}\nUse --force to overwrite it.")
+
+    try:
+        with urllib.request.urlopen(request) as response, tmp.open("wb") as handle:
+            total_raw = response.headers.get("Content-Length")
+            total = int(total_raw) if total_raw and total_raw.isdigit() else None
+            copied = 0
+            while True:
+                chunk = response.read(1024 * 1024)
+                if not chunk:
+                    break
+                handle.write(chunk)
+                copied += len(chunk)
+                if total:
+                    pct = 100 * copied / total
+                    print(f"Downloaded {copied / (1024 ** 2):.1f} / {total / (1024 ** 2):.1f} MB ({pct:.1f}%)", end="\r")
+                else:
+                    print(f"Downloaded {copied / (1024 ** 2):.1f} MB", end="\r")
+        print()
+        tmp.replace(out)
+    except (urllib.error.URLError, urllib.error.HTTPError, OSError) as exc:
+        if tmp.exists():
+            tmp.unlink()
+        raise SystemExit(f"ERROR: failed to download reference table: {exc}") from exc
+
+    print(f"Reference table written to: {out}")
+    return 0
+
+def make_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="celltaminate",
+        description="Run Celltaminate from Kraken2 or KrakenUniq taxonomic reports.",
+    )
+    parser.add_argument("--version", action="version", version=f"Celltaminate wrapper {VERSION}")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    run = sub.add_parser("run", help="Run the Celltaminate command-line workflow")
+    run.add_argument("--reports", nargs="+", help="One or more Kraken2 or KrakenUniq report files")
+    run.add_argument("--input-list", help="Text file containing one report path per line")
+    run.add_argument("--metadata", help="Metadata TSV with columns: sample, group, sample_type, is_control")
+    run.add_argument("--outdir", required=True, help="Output directory")
+    run.add_argument("--tax-level", choices=["G", "S"], default="S", help="Taxonomic level: G for genus or S for species")
+    run.add_argument("--host-species", default="human", help="Comma-separated host names: human,mouse,drosophila")
+    run.add_argument("--host-taxids-manual", default="", help="Additional host taxids, comma-separated")
+    run.add_argument("--include-protozoa", action=argparse.BooleanOptionalAction, default=True)
+    run.add_argument("--collapse-species", action=argparse.BooleanOptionalAction, default=True)
+    run.add_argument("--collapse-min-genus-reads", type=int, default=30)
+    run.add_argument("--collapse-top-frac", type=float, default=0.85)
+    run.add_argument("--fp-falsepos-cutoff", type=float, default=75)
+    run.add_argument("--fp-true-cutoff", type=float, default=5)
+    run.add_argument("--fp-aggressiveness", type=float, default=1.15)
+    run.add_argument("--ref-bg-tsv", help="Full reference background TSV. Recommended for real analyses.")
+    run.add_argument("--use-example-reference", action="store_true", help="Use the small bundled example reference table. Not recommended for real analyses.")
+    run.add_argument("--kitome-blacklist-tsv", help="Kitome/background blacklist TSV. Defaults to the bundled panel.")
+    run.add_argument("--clinical-panel-tsv", help="Clinically important pathogen TSV. Defaults to the bundled panel.")
+    run.add_argument("--protected-taxa-tsv", help="Optional TSV with sample and taxon columns")
+    run.add_argument("--quick-remove", default="false,unc", help="Comma-separated calls removed from cleaned reports: false,unc,true")
+    run.add_argument("--keep-descendants", action=argparse.BooleanOptionalAction, default=False)
+    run.add_argument("--show-fp-breakdown", action=argparse.BooleanOptionalAction, default=False)
+    run.add_argument("--save-cleaned-reanalysis", action=argparse.BooleanOptionalAction, default=True)
+    run.add_argument("--rscript", default=default_rscript(), help="Path to Rscript. Default: Rscript or $RSCRIPT")
+    run.add_argument("--dry-run", action="store_true", help="Print the R command without executing it")
+    run.set_defaults(func=cmd_run)
+
+    app = sub.add_parser("app", help="Launch the Shiny app")
+    app.add_argument("--rscript", default=default_rscript(), help="Path to Rscript. Default: Rscript or $RSCRIPT")
+    app.add_argument("--dry-run", action="store_true", help="Print the R command without executing it")
+    app.set_defaults(func=cmd_app)
+
+    init = sub.add_parser("init", help="Write template input_list.txt and metadata.tsv files")
+    init.add_argument("--outdir", default="celltaminate_template", help="Output directory for template files")
+    init.set_defaults(func=cmd_init)
+
+
+    download_ref = sub.add_parser("download-reference", help="Download the full reference background table from Zenodo")
+    download_ref.add_argument("--out", default="data/reference/refined_cell.lines.tsv", help="Output path for refined_cell.lines.tsv")
+    download_ref.add_argument("--url", default=REFERENCE_URL, help="Zenodo file download URL")
+    download_ref.add_argument("--force", action="store_true", help="Overwrite an existing output file")
+    download_ref.set_defaults(func=cmd_download_reference)
+
+    return parser
+
+
+def main() -> int:
+    parser = make_parser()
+    parsed = parser.parse_args()
+    return parsed.func(parsed)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

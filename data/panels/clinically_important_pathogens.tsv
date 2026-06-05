@@ -1,0 +1,139 @@
+category	Name	clinical_category	Remarks	doi
+virus	Severe acute respiratory syndrome-related coronavirus	human_pathogen	COVID-19 virus	10.1186/s40001-022-00874-x
+virus	Influenza A virus	human_pathogen	influenza A	10.1186/s40001-022-00874-x
+virus	Influenza B virus	human_pathogen	influenza B	10.1186/s40001-022-00874-x
+virus	human respiratory syncytial virus	human_pathogen	RSV	10.1186/s40001-022-00874-x
+virus	human metapneumovirus	human_pathogen	hMPV	10.1186/s40001-022-00874-x
+virus	Human immunodeficiency virus 1	human_pathogen	HIV-1	10.1001/jama.2021.23487
+virus	Hepatitis B virus	oncogenic_pathogen	HBV	10.14740/gr1405
+virus	Hepacivirus hominis	oncogenic_pathogen	Hepatitis C virus (HCV); chronic hepatitis and hepatocellular carcinoma-associated virus	10.14740/gr1405
+virus	Human alphaherpesvirus 1	human_pathogen	HSV-1	10.1055/s-0031-1283285
+virus	Human alphaherpesvirus 2	human_pathogen	HSV-2	10.1055/s-0031-1283285
+virus	Human betaherpesvirus 5	opportunistic_human_pathogen	Cytomegalovirus (CMV); congenital and opportunistic herpesvirus	10.1055/s-0031-1283285
+virus	human gammaherpesvirus 4	oncogenic_pathogen	Epstein-Barr virus (EBV); infectious mononucleosis and oncogenic herpesvirus	10.1055/s-0031-1283285
+virus	Human gammaherpesvirus 8	oncogenic_pathogen	Kaposi sarcoma-associated herpesvirus (KSHV/HHV-8); oncogenic herpesvirus	10.1055/s-0031-1283285
+virus	Human papillomavirus 16	oncogenic_pathogen	HPV16; oncogenic human papillomavirus	10.1093/jncics/pky045
+virus	human papillomavirus 18	oncogenic_pathogen	HPV18; oncogenic human papillomavirus	10.1093/jncics/pky045
+virus	Measles morbillivirus	human_pathogen	measles virus	10.1056/NEJMcp1905181
+virus	Norwalk virus	human_pathogen	norovirus prototype taxon	10.1128/cmr.00075-14
+virus	Rotavirus A	human_pathogen	rotavirus A	10.1038/nrdp.2017.83
+virus	Merkel cell polyomavirus	oncogenic_pathogen	Merkel cell polyomavirus (MCPyV); skin cancer-associated polyomavirus	10.1016/j.jdermsci.2021.10.004
+virus	Primate T-lymphotropic virus 1	oncogenic_pathogen	Human T-lymphotropic virus 1 (HTLV-1); leukemogenic retrovirus	10.3389/fmicb.2017.01425
+bacterium	Acinetobacter baumannii	opportunistic_human_pathogen	major healthcare-associated pathogen	10.1038/s41579-024-01054-w
+bacterium	Pseudomonas aeruginosa	opportunistic_human_pathogen	major healthcare-associated pathogen	10.1038/s41579-024-01054-w
+bacterium	Klebsiella pneumoniae	opportunistic_human_pathogen	major healthcare-associated pathogen	10.1038/s41579-024-01054-w
+bacterium	Escherichia coli	human_pathogen	common invasive and urinary pathogen	10.1038/nrmicro3432
+bacterium	Enterobacter cloacae	opportunistic_human_pathogen	major Enterobacterales pathogen	10.1038/s41579-024-01054-w
+bacterium	Serratia marcescens	opportunistic_human_pathogen	healthcare-associated pathogen	10.1038/s41579-024-01054-w
+bacterium	Salmonella enterica	human_pathogen	enteric fever and salmonellosis	10.1016/j.gtc.2021.02.002
+bacterium	Shigella sonnei	human_pathogen	shigellosis	10.1016/j.gtc.2021.02.002
+bacterium	Shigella flexneri	human_pathogen	shigellosis	10.1016/j.gtc.2021.02.002
+bacterium	Neisseria gonorrhoeae	human_pathogen	gonorrhea	10.1001/jama.2021.23487
+bacterium	Staphylococcus aureus	human_pathogen	invasive and skin infections	10.1038/s41579-024-01054-w
+bacterium	Enterococcus faecium	opportunistic_human_pathogen	VRE-prone nosocomial pathogen	10.1038/s41579-024-01054-w
+bacterium	Enterococcus faecalis	opportunistic_human_pathogen	UTI and bloodstream infections	10.1038/nrmicro3432
+bacterium	Mycobacterium tuberculosis	human_pathogen	tuberculosis	10.3389/fcimb.2018.00158
+bacterium	Streptococcus pneumoniae	human_pathogen	pneumonia meningitis sepsis	10.3390/microorganisms9020449
+bacterium	Streptococcus pyogenes	human_pathogen	GAS	10.3390/pathogens10020248
+bacterium	Streptococcus agalactiae	human_pathogen	GBS	10.1128/microbiolspec.GPP3-0007-2018
+bacterium	Neisseria meningitidis	human_pathogen	meningococcal disease	10.3390/microorganisms9020449
+bacterium	Clostridioides difficile	opportunistic_human_pathogen	major healthcare-associated diarrhea	10.7759/cureus.51167
+bacterium	Helicobacter pylori	oncogenic_pathogen	ulcer disease and gastric cancer risk	10.1016/S2214-109X(19)30488-7
+bacterium	Campylobacter jejuni	human_pathogen	bacterial gastroenteritis	10.1016/j.gtc.2021.02.002
+bacterium	Vibrio cholerae	human_pathogen	cholera	10.1016/j.gtc.2021.02.002
+bacterium	Listeria monocytogenes	human_pathogen	invasive foodborne infection	10.1128/CMR.14.3.584-640.2001
+bacterium	Legionella pneumophila	human_pathogen	Legionnaires' disease	10.1016/j.amjmed.2004.07.007
+bacterium	Corynebacterium diphtheriae	human_pathogen	diphtheria	10.1086/315554
+bacterium	Bordetella pertussis	human_pathogen	pertussis	10.1097/QCO.0000000000000264
+bacterium	Treponema pallidum	human_pathogen	syphilis	10.1038/nrmicro.2016.141
+bacterium	Haemophilus influenzae	human_pathogen	respiratory and invasive infection	10.3390/microorganisms9020449
+bacterium	Mycoplasma pneumoniae	human_pathogen	atypical pneumonia	10.1016/j.amjmed.2004.07.007
+bacterium	Yersinia pestis	human_pathogen	plague	10.1007/s12223-009-0046-1
+bacterium	Francisella tularensis	human_pathogen	tularemia	10.1007/s12223-009-0046-1
+bacterium	Proteus mirabilis	opportunistic_human_pathogen	UTI pathogen	10.1038/nrmicro3432
+fungus	Candida auris	opportunistic_human_pathogen	multidrug-resistant yeast	10.3390/pathogens13050426
+fungus	Candida albicans	opportunistic_human_pathogen	major invasive candidiasis species	10.3390/pathogens13050426
+fungus	Aspergillus fumigatus	opportunistic_human_pathogen	major invasive mold	10.3390/pathogens13050426
+fungus	Cryptococcus neoformans	opportunistic_human_pathogen	cryptococcosis	10.3390/pathogens13050426
+fungus	Nakaseomyces glabratus	opportunistic_human_pathogen	Candida glabrata; invasive candidiasis and antifungal resistance concern	10.3390/pathogens13050426
+fungus	Clavispora lusitaniae	opportunistic_human_pathogen	Candida lusitaniae; opportunistic invasive yeast	10.3390/pathogens13050426
+fungus	Pneumocystis jirovecii	opportunistic_human_pathogen	PJP	10.3390/pathogens13050426
+fungus	Histoplasma capsulatum	human_pathogen	histoplasmosis	10.3390/pathogens13050426
+fungus	Coccidioides immitis	human_pathogen	valley fever	10.3390/pathogens13050426
+fungus	Coccidioides posadasii	human_pathogen	valley fever	10.3390/pathogens13050426
+fungus	Blastomyces dermatitidis	human_pathogen	blastomycosis	10.3390/pathogens13050426
+fungus	Rhizopus arrhizus	opportunistic_human_pathogen	mucormycosis	10.3390/pathogens13050426
+fungus	Mucor circinelloides	opportunistic_human_pathogen	mucormycosis	10.3390/pathogens13050426
+fungus	Lomentospora prolificans	opportunistic_human_pathogen	refractory invasive mold infection	10.3390/pathogens13050426
+fungus	Scedosporium apiospermum	opportunistic_human_pathogen	invasive mold infection	10.3390/pathogens13050426
+fungus	Fusarium solani	opportunistic_human_pathogen	fusariosis	10.3390/pathogens13050426
+protozoan	Plasmodium falciparum	human_pathogen	malaria	10.1016/j.cell.2016.07.055
+protozoan	Plasmodium vivax	human_pathogen	malaria	10.1016/j.cell.2016.07.055
+protozoan	Toxoplasma gondii	human_pathogen	toxoplasmosis	10.1128/CMR.05013-11
+protozoan	Entamoeba histolytica	human_pathogen	amebiasis	10.3390/pathogens8030116
+protozoan	Giardia duodenalis	human_pathogen	Giardia lamblia / Giardia intestinalis; giardiasis	10.3390/pathogens8030116
+protozoan	Cryptosporidium parvum	human_pathogen	cryptosporidiosis	10.3390/pathogens8030116
+protozoan	Trypanosoma cruzi	human_pathogen	Chagas disease	10.1007/s40475-021-00232-7
+protozoan	Trypanosoma brucei gambiense	human_pathogen	African trypanosomiasis	10.1007/s40475-021-00232-7
+protozoan	Leishmania donovani	human_pathogen	visceral leishmaniasis	10.1007/s40475-021-00232-7
+protozoan	Trichomonas vaginalis	human_pathogen	trichomoniasis	10.1001/jama.2021.23487
+protozoan	Babesia microti	human_pathogen	babesiosis	10.1016/j.cell.2016.07.055
+protozoan	Naegleria fowleri	human_pathogen	primary amebic meningoencephalitis	10.1111/j.1574-695X.2007.00232.x
+protozoan	Acanthamoeba castellanii	human_pathogen	keratitis and granulomatous amebic encephalitis	10.1111/j.1574-695X.2007.00232.x
+protozoan	Balamuthia mandrillaris	human_pathogen	granulomatous amebic encephalitis	10.1111/j.1574-695X.2007.00232.x
+strain_or_type	Staphylococcus aureus subsp. aureus MRSA252	clinically_significant_strain	MRSA strain	10.1038/s41579-024-01054-w
+strain_or_type	Escherichia coli O157:H7 str. Sakai	clinically_significant_strain	EHEC strain	10.1128/CMR.00073-14
+strain_or_type	Escherichia coli CFT073	clinically_significant_strain	uropathogenic E. coli strain	10.1038/nrmicro3432
+strain_or_type	Acinetobacter baumannii ACICU	clinically_significant_strain	multidrug-resistant strain	10.1038/s41579-024-01054-w
+strain_or_type	Clostridioides difficile R20291	clinically_significant_strain	hypervirulent ribotype 027-associated strain	10.7759/cureus.51167
+strain_or_type	Enterococcus faecalis V583	clinically_significant_strain	vancomycin-resistant lineage strain	10.1038/s41579-024-01054-w
+strain_or_type	Enterococcus faecium DO	clinically_significant_strain	opportunistic pathogen associated with vancomycin resistance transfer	10.1038/s41579-024-01054-w
+strain_or_type	Klebsiella pneumoniae subsp. pneumoniae HS11286	clinically_significant_strain	carbapenem-resistant strain	10.1038/s41579-024-01054-w
+strain_or_type	Salmonella enterica subsp. enterica serovar Typhi str. Ty2	clinically_significant_strain	Typhi strain	10.1016/j.gtc.2021.02.002
+strain_or_type	Salmonella enterica subsp. enterica serovar Typhimurium str. LT2	clinically_significant_strain	Typhimurium strain	10.1016/j.gtc.2021.02.002
+strain_or_type	Mycobacterium tuberculosis H37Rv	clinically_significant_strain	reference strain for MTB	10.3389/fcimb.2018.00158
+strain_or_type	Human papillomavirus 16	clinically_significant_strain	HPV16; oncogenic human papillomavirus	10.1093/jncics/pky045
+strain_or_type	human papillomavirus 18	clinically_significant_strain	HPV18; oncogenic human papillomavirus	10.1093/jncics/pky045
+virus	Zaire ebolavirus	human_pathogen	Ebola virus species associated with major human outbreaks	10.1056/NEJMra1901594
+virus	Human alphaherpesvirus 3	human_pathogen	VZV or varicella-zoster virus	10.1093/infdis/jiy403
+virus	Hepatitis delta virus	human_pathogen	HDV or hepatitis D virus	10.14740/gr1405
+virus	Hepatitis E virus	human_pathogen	HEV	10.14740/gr1405
+virus	Dengue virus	human_pathogen	dengue	10.1056/NEJMra1110265
+virus	Lyssavirus rabies	human_pathogen	rabies virus	10.3389/fimmu.2021.786953
+bacterium	Chlamydia trachomatis	oncogenic_pathogen	chlamydia and cancer-associated bacterium	10.1097/MD.0000000000003077
+bacterium	Fusobacterium nucleatum	oncogenic_pathogen	colorectal cancer-associated bacterium	10.4251/wjgo.v10.i3.71
+bacterium	Bacteroides fragilis	human_pathogen	enterotoxigenic lineages linked to colorectal cancer	10.1016/j.neo.2022.100797
+bacterium	Streptococcus gallolyticus	human_pathogen	colorectal neoplasia-associated bacterium	10.1093/cid/cir609
+bacterium	Clostridium septicum	human_pathogen	bacteremia strongly linked to occult colorectal malignancy	10.1016/j.ejim.2017.02.009
+bacterium	Stenotrophomonas maltophilia	human_pathogen	multidrug-resistant opportunistic pathogen	10.1093/jacamr/dlac040
+bacterium	Burkholderia pseudomallei	human_pathogen	melioidosis	10.1080/21505594.2022.2139063
+bacterium	Brucella melitensis	human_pathogen	brucellosis	10.1080/07853890.2023.2295398
+bacterium	Mycobacterium leprae	human_pathogen	leprosy	10.1080/21505594.2022.2141987
+fungus	Candida tropicalis	human_pathogen	major invasive candidiasis species	10.3390/pathogens13050426
+fungus	Candida parapsilosis	human_pathogen	major invasive candidiasis species	10.3390/pathogens13050426
+fungus	Pichia kudriavzevii	human_pathogen	Candida krusei current name	10.3390/pathogens13050426
+fungus	Cryptococcus gattii	human_pathogen	cryptococcosis	10.3390/pathogens13050426
+fungus	Aspergillus flavus	human_pathogen	aspergillosis	10.3390/pathogens13050426
+fungus	Aspergillus terreus	human_pathogen	aspergillosis	10.3390/pathogens13050426
+fungus	Talaromyces marneffei	human_pathogen	talaromycosis	10.3390/pathogens13050426
+protozoan	Plasmodium knowlesi	human_pathogen	zoonotic malaria	10.1093/cid/cir180
+protozoan	Cyclospora cayetanensis	human_pathogen	cyclosporiasis	10.3390/microorganisms7090317
+protozoan	Cystoisospora belli	human_pathogen	cystoisosporiasis	10.1017/S0031182019000957
+protozoan	Leishmania infantum	human_pathogen	visceral leishmaniasis	10.1007/s40475-021-00232-7
+helminth	Clonorchis sinensis	oncogenic_pathogen	liver fluke and cholangiocarcinoma-associated helminth	10.5483/BMBRep.2016.49.11.109
+helminth	Opisthorchis viverrini	oncogenic_pathogen	liver fluke and cholangiocarcinoma-associated helminth	10.5483/BMBRep.2016.49.11.109
+helminth	Schistosoma haematobium	oncogenic_pathogen	urogenital schistosomiasis and bladder cancer-associated helminth	10.5483/BMBRep.2016.49.11.109
+helminth	Strongyloides stercoralis	human_pathogen	strongyloidiasis	10.3390/tropicalmed7100310
+helminth	Taenia solium	human_pathogen	taeniasis and neurocysticercosis	10.1128/CMR.00085-19
+strain_or_type	Human papillomavirus 31	clinically_significant_strain	oncogenic viral type	10.1093/jncics/pky045
+strain_or_type	Human papillomavirus 45	clinically_significant_strain	oncogenic viral type	10.1093/jncics/pky045
+strain_or_type	Human papillomavirus 52	clinically_significant_strain	oncogenic viral type	10.1093/jncics/pky045
+strain_or_type	Human papillomavirus 58	clinically_significant_strain	oncogenic viral type	10.1093/jncics/pky045
+bacterium	Escherichia coli O25b:H4-ST131	UTI	requested as Escherichia coli ST131; NCBI/Kraken-compatible name for the globally disseminated MDR uropathogenic ST131 lineage	10.1371/journal.pone.0026578
+bacterium	Klebsiella pneumoniae subsp. pneumoniae KPNIH1	UTI	requested as Klebsiella pneumoniae subsp. pneumoniae KPC; NCBI/Kraken-compatible KPC-associated clinical outbreak strain	10.1128/JB.00352-17
+bacterium	Staphylococcus saprophyticus	UTI	common cause of uncomplicated UTI	10.1073/pnas.0502950102
+bacterium	Enterobacter cloacae complex	UTI	requested label retained; exact NCBI current name for a species-group taxon often reported in clinical microbiology	10.1128/spectrum.04312-23
+bacterium	Providencia stuartii	UTI	catheter-associated and complicated UTI pathogen	10.1038/s41579-024-01054-w
+bacterium	Morganella morganii	UTI	complicated UTI and opportunistic invasive infections	10.1038/s41579-024-01054-w
+fungus	Candida albicans SC5314	UTI	requested strain retained; NCBI/Kraken-compatible reference strain name	10.1073/pnas.0401648101
+bacterium	Pseudomonas aeruginosa 19BR	UTI	requested as Pseudomonas aeruginosa MDR; NCBI/Kraken-compatible strain name for a multidrug- and polymyxin-resistant clinical isolate	10.1128/AAC.01267-08

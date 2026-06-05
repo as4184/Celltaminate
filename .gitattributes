@@ -1,0 +1,13 @@
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.pdf binary
+*.xlsx binary
+*.tsv text eol=lf
+*.R text eol=lf
+*.py text eol=lf
+*.sh text eol=lf
+
+# If the full reference background table is approved for repository distribution,
+# uncomment the next line after installing and configuring Git LFS.
+# data/reference/refined_cell.lines.tsv filter=lfs diff=lfs merge=lfs -text

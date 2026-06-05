@@ -1,0 +1,61 @@
+organism_name	evidence_class	doi_hyperlink	note
+Acidovorax citrulli	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Acidovorax ebreus	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Acinetobacter bereziniae	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Acinetobacter junii	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Acinetobacter pittii	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Acinetobacter ursingii	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Aeromonas caviae	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Agrobacterium tumefaciens	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+BA V virus	recurrent_background_artifact	https://doi.org/10.1016/j.ebiom.2021.103649	Listed among prevalent background microorganisms present in >5 sites in a multicenter metagenomic assessment.
+Bacillus cereus	recurrent_background_negative_control	https://doi.org/10.3389/fmicb.2020.01687	Reported as a dominant bacterial species in a sequencing negative control.
+Bacillus weihenstephanensis	recurrent_background_negative_control	https://doi.org/10.3389/fmicb.2020.01687	Reported as a bacterial species in a sequencing negative control.
+Bifidobacterium longum	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Brucella intermedia	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Brucella oryzae	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Brucella ovis	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Burkholderia contaminans	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Chryseobacterium queenslandicum	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Cloacibacterium normanense	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Corynebacterium accolens	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Corynebacterium glucuronolyticum	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Corynebacterium kefirresidentii	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Corynebacterium tuberculostearicum	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Cutibacterium acnes	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Escherichia coli	strict_reagent_blank; recurrent_background_negative_control	https://doi.org/10.1128/spectrum.03119-24; https://doi.org/10.3389/fmicb.2020.01687	Detected in extraction blanks and also reported among dominant species in a sequencing negative control.
+Fusarium proliferatum	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Gorganvirus isfahan	recurrent_background_artifact	https://doi.org/10.1093/bioinformatics/btaa926; https://doi.org/10.3390/pathogens14090935	Current name; formerly Proteus virus Isfahan. Reported as a recurrent phage/background artifact.
+Janibacter indicus	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Malassezia globosa	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Malassezia restricta	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Mesorhizobium terrae	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Methylobacterium brachiatum	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Micrococcus luteus	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Moraxella osloensis	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Mycobacteroides franklinii	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Paraburkholderia fungorum	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Paracoccus mutanolyticus	recurrent_background_artifact	https://doi.org/10.1016/j.ebiom.2021.103649	Listed among prevalent background microorganisms present in >5 sites in a multicenter metagenomic assessment.
+Paracoccus sanguinis	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Phocaeicola vulgatus	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Proteus virus Isfahan	recurrent_background_artifact	https://doi.org/10.1093/bioinformatics/btaa926; https://doi.org/10.3390/pathogens14090935	Legacy synonym of Gorganvirus isfahan. Reported as a recurrent phage/background artifact.
+Pseudomonas aeruginosa	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Pseudomonas fluorescens	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Pseudomonas mendocina	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Pseudomonas oleovorans	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Rhodococcus qingshengii	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Saccharomyces cerevisiae	recurrent_background_negative_control	https://doi.org/10.3389/fmicb.2020.01687	Reported as the most abundant microorganism by MetaPhlAn in a sequencing negative control.
+Serratia liquefaciens	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Serratia marcescens	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Shewanella algae	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Shigella boydii	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Shigella dysenteriae	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Shigella sonnei	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Sphingomonas melonis	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Staphylococcus aureus	recurrent_background_negative_control	https://doi.org/10.3389/fmicb.2020.01687	Reported as a dominant bacterial species in a sequencing negative control.
+Staphylococcus epidermidis	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Staphylococcus haemolyticus	recurrent_background_artifact	https://doi.org/10.1016/j.ebiom.2021.103649	Listed among prevalent background microorganisms present in >5 sites in a multicenter metagenomic assessment.
+Stenotrophomonas maltophilia	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Stutzerimonas stutzeri	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Vibrio fluvialis	strict_reagent_blank	https://doi.org/10.1128/spectrum.03119-24	Detected in extraction blank / reagent-control metagenomic workflow study.
+Yarrowia lipolytica	recurrent_background_lab_model	https://doi.org/10.1128/spectrum.01779-22	Used as an example of a significant common laboratory contaminant in a library-concentration-normalized background model study.
+Yersinia enterocolitica	recurrent_background_artifact	https://doi.org/10.1016/j.ebiom.2021.103649	Listed among prevalent background microorganisms present in >5 sites in a multicenter metagenomic assessment.

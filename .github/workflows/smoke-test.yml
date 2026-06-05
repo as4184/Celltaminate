@@ -1,0 +1,19 @@
+name: smoke-test
+
+on:
+  pull_request:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  wrapper-dry-run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check wrapper help
+        run: |
+          python3 bin/celltaminate --help
+          python3 bin/celltaminate run --help
+      - name: Dry-run example command
+        run: |
+          python3 bin/celltaminate run                 --input-list examples/lung_nanopore/input_list.txt                 --metadata examples/lung_nanopore/metadata.tsv                 --outdir /tmp/celltaminate_dry_run                 --use-example-reference                 --dry-run

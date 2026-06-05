@@ -1,0 +1,16 @@
+Bootstrap: docker
+From: rocker/r-ver:4.3.3
+
+%post
+    apt-get update && apt-get install -y --no-install-recommends             python3             python3-pip             libcurl4-openssl-dev             libssl-dev             libxml2-dev             zlib1g-dev
+    rm -rf /var/lib/apt/lists/*
+    Rscript -e "install.packages(c('dplyr','ggplot2','ggrepel','fmsb','writexl','tibble','tidyr','shiny','shinyWidgets','DT','httr','jsonlite','zip','xml2'), repos='https://cloud.r-project.org')"
+
+%files
+    . /opt/Celltaminate
+
+%environment
+    export PATH="/opt/Celltaminate/bin:$PATH"
+
+%runscript
+    exec /opt/Celltaminate/bin/celltaminate "$@"
