@@ -9,7 +9,7 @@ bash examples/lung_nanopore/run_example.sh
 
 ## Reference background table
 
-For real analyses, download the full reference background table from Zenodo before running Celltaminate:
+Download the full reference background table from Zenodo before running Celltaminate:
 
 ```bash
 bin/celltaminate download-reference --out data/reference/refined_cell.lines.tsv
@@ -46,8 +46,6 @@ bin/celltaminate run \
   --outdir celltaminate_results \
   --tax-level S
 ```
-
-This is acceptable for a first technical run, but reference background and metadata are recommended for real interpretation.
 
 ## Create metadata templates
 
