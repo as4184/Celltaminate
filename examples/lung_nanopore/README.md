@@ -16,5 +16,3 @@ Run from the repository root:
 ```bash
 bash examples/lung_nanopore/run_example.sh
 ```
-
-The example uses the small bundled reference table only to exercise the workflow. Real analyses should use the full reference background table.
