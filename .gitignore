@@ -31,3 +31,4 @@ local/
 .DS_Store
 Thumbs.db
 data/reference/refined_cell.lines.tsv.gz
+tmp/

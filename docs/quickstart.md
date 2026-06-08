@@ -25,6 +25,28 @@ curl -L -o data/reference/refined_cell.lines.tsv \
 
 DOI: `10.5281/zenodo.20560460`
 
+## Start from FASTQ files
+
+Celltaminate starts from Kraken2/KrakenUniq reports. To run the upstream FASTQ classification step and then Celltaminate:
+
+```bash
+python scripts/celltaminate_full_workflow.py \
+  --samplesheet samples.tsv \
+  --kraken2-db /path/to/kraken2_database \
+  --outdir celltaminate_full_run \
+  --threads 16 \
+  --report-minimizer-data \
+  --ref-bg-tsv data/reference/refined_cell.lines.tsv
+```
+
+The same workflow is available through the main wrapper:
+
+```bash
+bin/celltaminate from-fastq --samplesheet samples.tsv --kraken2-db /path/to/kraken2_database --outdir celltaminate_full_run
+```
+
+See [FASTQ to Celltaminate workflow](full_fastq_workflow.md) for the samplesheet format and standalone Kraken2 commands.
+
 ## Run your own Kraken reports
 
 ```bash

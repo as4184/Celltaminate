@@ -5,6 +5,7 @@ channels:
   - defaults
 dependencies:
   - python>=3.9
+  - kraken2
   - r-base>=4.2
   - r-dplyr
   - r-ggplot2

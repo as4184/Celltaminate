@@ -38,3 +38,27 @@ Required columns:
 - `group`: biological or study group;
 - `sample_type`: sequencing or sample description;
 - `is_control`: `TRUE` or `FALSE`.
+
+
+## FASTQ samplesheet for the full workflow
+
+If using `scripts/celltaminate_full_workflow.py` or `bin/celltaminate from-fastq`, provide a TSV/CSV samplesheet with:
+
+```text
+sample	r1	r2	group	sample_type	is_control
+Sample1	/path/to/Sample1_R1.fastq.gz	/path/to/Sample1_R2.fastq.gz	Case	Illumina	FALSE
+Sample2	/path/to/Sample2.fastq.gz		Case	Nanopore	FALSE
+```
+
+Required columns:
+
+- `sample`: sample identifier with no path separators;
+- `r1`: first FASTQ/FASTQ.GZ file, or the only FASTQ file for single-end/Nanopore data.
+
+Optional columns:
+
+- `r2`: second FASTQ/FASTQ.GZ file for paired-end data;
+- `group`: biological group;
+- `sample_type`: sample or sequencing type;
+- `is_control`: `TRUE` or `FALSE`;
+- `report`: existing Kraken2 report path when `--skip-kraken2` is used.

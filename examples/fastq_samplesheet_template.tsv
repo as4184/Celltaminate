@@ -1,0 +1,4 @@
+sample	r1	r2	group	sample_type	is_control
+Sample1	/path/to/Sample1_R1.fastq.gz	/path/to/Sample1_R2.fastq.gz	Case	Illumina	FALSE
+Sample2	/path/to/Sample2.fastq.gz		Case	Nanopore	FALSE
+Control1	/path/to/Control1_R1.fastq.gz	/path/to/Control1_R2.fastq.gz	Control	Illumina	TRUE

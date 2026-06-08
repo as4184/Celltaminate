@@ -37,3 +37,14 @@ The command-line workflow uses `dplyr`, `ggplot2`, `ggrepel`, `fmsb`, `writexl`,
 ## Reference background table
 
 The full `refined_cell.lines.tsv` reference background table is available from Zenodo, DOI `10.5281/zenodo.20560460`. Download it locally and provide it with `--ref-bg-tsv`.
+
+
+## Windows executable launcher
+
+A Windows `.exe` launcher can be built with PyInstaller:
+
+```bat
+windows\build_windows_exe.bat
+```
+
+The generated `dist\CelltaminateRunner.exe` runs the workflow orchestration code. Kraken2, the Kraken2 database, R/Rscript, and the reference background table must still be installed or provided separately. See [Windows executable launcher](../windows/README.md).

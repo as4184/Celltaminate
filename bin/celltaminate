@@ -45,6 +45,16 @@ def existing_optional_file(path: Optional[str], label: str) -> Optional[Path]:
     return existing_file(str(path), label)
 
 
+
+def add_boolean_argument(parser: argparse.ArgumentParser, name: str, default: bool = False, help: str = None) -> None:
+    """Add --flag and --no-flag without requiring argparse.BooleanOptionalAction."""
+    dest = name.lstrip("-").replace("-", "_")
+    group = parser.add_mutually_exclusive_group(required=False)
+    group.add_argument(name, dest=dest, action="store_true", help=help)
+    group.add_argument("--no-" + name.lstrip("-"), dest=dest, action="store_false")
+    parser.set_defaults(**{dest: default})
+
+
 def str_bool(value: bool) -> str:
     return "TRUE" if value else "FALSE"
 
@@ -298,6 +308,18 @@ def cmd_download_reference(parsed: argparse.Namespace) -> int:
     print(f"Reference table written to: {out}")
     return 0
 
+
+def cmd_from_fastq(parsed: argparse.Namespace) -> int:
+    workflow = repo_root() / "scripts" / "celltaminate_full_workflow.py"
+    if not workflow.exists():
+        raise SystemExit(f"ERROR: full workflow script not found: {workflow}")
+    workflow_args = list(parsed.workflow_args or [])
+    if not workflow_args:
+        workflow_args = ["--help"]
+    cmd = [sys.executable, str(workflow)] + workflow_args
+    return subprocess.call(cmd)
+
+
 def make_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="celltaminate",
@@ -314,8 +336,8 @@ def make_parser() -> argparse.ArgumentParser:
     run.add_argument("--tax-level", choices=["G", "S"], default="S", help="Taxonomic level: G for genus or S for species")
     run.add_argument("--host-species", default="human", help="Comma-separated host names: human,mouse,drosophila")
     run.add_argument("--host-taxids-manual", default="", help="Additional host taxids, comma-separated")
-    run.add_argument("--include-protozoa", action=argparse.BooleanOptionalAction, default=True)
-    run.add_argument("--collapse-species", action=argparse.BooleanOptionalAction, default=True)
+    add_boolean_argument(run, "--include-protozoa", default=True)
+    add_boolean_argument(run, "--collapse-species", default=True)
     run.add_argument("--collapse-min-genus-reads", type=int, default=30)
     run.add_argument("--collapse-top-frac", type=float, default=0.85)
     run.add_argument("--fp-falsepos-cutoff", type=float, default=75)
@@ -327,9 +349,9 @@ def make_parser() -> argparse.ArgumentParser:
     run.add_argument("--clinical-panel-tsv", help="Clinically important pathogen TSV. Defaults to the bundled panel.")
     run.add_argument("--protected-taxa-tsv", help="Optional TSV with sample and taxon columns")
     run.add_argument("--quick-remove", default="false,unc", help="Comma-separated calls removed from cleaned reports: false,unc,true")
-    run.add_argument("--keep-descendants", action=argparse.BooleanOptionalAction, default=False)
-    run.add_argument("--show-fp-breakdown", action=argparse.BooleanOptionalAction, default=False)
-    run.add_argument("--save-cleaned-reanalysis", action=argparse.BooleanOptionalAction, default=True)
+    add_boolean_argument(run, "--keep-descendants", default=False)
+    add_boolean_argument(run, "--show-fp-breakdown", default=False)
+    add_boolean_argument(run, "--save-cleaned-reanalysis", default=True)
     run.add_argument("--rscript", default=default_rscript(), help="Path to Rscript. Default: Rscript or $RSCRIPT")
     run.add_argument("--dry-run", action="store_true", help="Print the R command without executing it")
     run.set_defaults(func=cmd_run)
@@ -342,6 +364,10 @@ def make_parser() -> argparse.ArgumentParser:
     init = sub.add_parser("init", help="Write template input_list.txt and metadata.tsv files")
     init.add_argument("--outdir", default="celltaminate_template", help="Output directory for template files")
     init.set_defaults(func=cmd_init)
+
+    from_fastq = sub.add_parser("from-fastq", help="Run FASTQ -> Kraken2 reports -> Celltaminate")
+    from_fastq.add_argument("workflow_args", nargs=argparse.REMAINDER, help="Arguments passed to scripts/celltaminate_full_workflow.py")
+    from_fastq.set_defaults(func=cmd_from_fastq)
 
 
     download_ref = sub.add_parser("download-reference", help="Download the full reference background table from Zenodo")

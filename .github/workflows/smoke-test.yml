@@ -14,6 +14,8 @@ jobs:
         run: |
           python3 bin/celltaminate --help
           python3 bin/celltaminate run --help
+          python3 bin/celltaminate from-fastq --help
+          python3 scripts/celltaminate_full_workflow.py --help
       - name: Dry-run example command
         run: |
           python3 bin/celltaminate run                 --input-list examples/lung_nanopore/input_list.txt                 --metadata examples/lung_nanopore/metadata.tsv                 --outdir /tmp/celltaminate_dry_run                 --use-example-reference                 --dry-run

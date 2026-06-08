@@ -75,6 +75,26 @@ Launch the Shiny app:
 bin/celltaminate app
 ```
 
+## Starting from FASTQ files
+
+Celltaminate runs on Kraken2/KrakenUniq report files. If you are starting from FASTQ files, generate Kraken2 reports first, or use the full workflow helper:
+
+```bash
+python scripts/celltaminate_full_workflow.py \
+  --samplesheet samples.tsv \
+  --kraken2-db /path/to/kraken2_database \
+  --outdir celltaminate_full_run \
+  --threads 16 \
+  --report-minimizer-data \
+  --ref-bg-tsv data/reference/refined_cell.lines.tsv
+```
+
+The FASTQ samplesheet format is documented in [FASTQ to Celltaminate workflow](docs/full_fastq_workflow.md). The same workflow can be launched through:
+
+```bash
+bin/celltaminate from-fastq --samplesheet samples.tsv --kraken2-db /path/to/kraken2_database --outdir celltaminate_full_run
+```
+
 ## Minimal metadata format
 
 `metadata.tsv` must be tab-separated:
@@ -126,6 +146,7 @@ DOI: 10.5281/zenodo.20560460
 
 - [Installation](docs/installation.md)
 - [Quick start](docs/quickstart.md)
+- [FASTQ to Celltaminate workflow](docs/full_fastq_workflow.md)
 - [Input formats](docs/input_formats.md)
 - [Output files](docs/output_files.md)
 - [Reference data](docs/reference_data.md)

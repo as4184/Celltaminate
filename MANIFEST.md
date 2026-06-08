@@ -11,6 +11,7 @@
 - `CONTRIBUTING.md`
 - `Dockerfile`
 - `LICENSE.md`
+- `MANIFEST.md`
 - `README.md`
 - `SECURITY.md`
 - `app/Celltaminate_app.R`
@@ -19,13 +20,7 @@
 - `data/panels/README.md`
 - `data/panels/clinically_important_pathogens.tsv`
 - `data/panels/kitome_and_background_blacklist.tsv`
-- `data/reference/README.md`
-- `data/reference/refined_cell.lines.example.tsv`
-- `docs/assets/celltaminate_logo.svg`
-- `docs/assets/figure1_celltaminate_overview.png`
-- `docs/assets/figure2_benchmarking.png`
-- `docs/assets/figure3_clinical_applications.png`
-- `docs/assets/supplementary_figure1_scoring_details.png`
+- `docs/full_fastq_workflow.md`
 - `docs/input_formats.md`
 - `docs/installation.md`
 - `docs/output_files.md`
@@ -35,13 +30,18 @@
 - `docs/shiny_app.md`
 - `docs/troubleshooting.md`
 - `environment.yml`
+- `examples/fastq_samplesheet_template.tsv`
 - `examples/lung_nanopore/README.md`
 - `examples/lung_nanopore/S6.kraken.report.txt`
 - `examples/lung_nanopore/input_list.txt`
 - `examples/lung_nanopore/metadata.tsv`
 - `examples/lung_nanopore/run_example.sh`
 - `scripts/Celltaminate.R`
+- `scripts/celltaminate_full_workflow.py`
+- `scripts/download_reference_from_zenodo.py`
 - `tests/README.md`
+- `windows/README.md`
+- `windows/build_windows_exe.bat`
 
 ## External reference data
 
