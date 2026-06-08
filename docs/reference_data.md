@@ -14,7 +14,7 @@ The full `refined_cell.lines.tsv` reference background table is available from Z
 DOI: 10.5281/zenodo.20560460
 ```
 
-Download it before real analysis:
+Download it before running an analysis:
 
 ```bash
 bin/celltaminate download-reference --out data/reference/refined_cell.lines.tsv
@@ -28,7 +28,7 @@ curl -L -o data/reference/refined_cell.lines.tsv \
   "https://zenodo.org/records/20560460/files/refined_cell.lines.tsv?download=1"
 ```
 
-Then pass the file explicitly:
+Then pass the file like this:
 
 ```bash
 bin/celltaminate run \
@@ -37,17 +37,3 @@ bin/celltaminate run \
   --outdir results \
   --ref-bg-tsv data/reference/refined_cell.lines.tsv
 ```
-
-## Example reference table
-
-This repository includes a small example file:
-
-```text
-data/reference/refined_cell.lines.example.tsv
-```
-
-This file is only for testing the command-line workflow. It is not a replacement for the full reference background table.
-
-## Storage note
-
-The full reference table should usually stay outside normal Git tracking. The repository `.gitignore` excludes `data/reference/refined_cell.lines.tsv` by default so users can download it locally without accidentally committing the large table.
