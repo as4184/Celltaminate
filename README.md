@@ -1,12 +1,8 @@
 # Celltaminate
 
-![Celltaminate logo](docs/assets/celltaminate_logo.svg)
-
 **Celltaminate** (**C**ontamination **E**valuation for **L**ow-Level **T**axon-**A**bundance in **M**icrobial **I**nference with **N**oise-**A**ware **T**riage **E**stimate) is an R-based command-line and Shiny application for contamination-aware prioritization of microbial taxa from host-dominated sequencing data.
 
-Celltaminate starts from **Kraken2** or **KrakenUniq** taxonomic reports. It does not replace taxonomic classification. It adds a second interpretation layer that asks whether each detected microbial taxon behaves more like a sample-relevant signal or more like background, reagent, environmental, or taxonomic assignment noise.
-
-![Overview of the Celltaminate workflow](docs/assets/figure1_celltaminate_overview.png)
+Celltaminate starts from **Kraken2** or **KrakenUniq** taxonomic reports, and adds a second interpretation layer that asks whether each detected microbial taxon behaves more like a true signal or more like reagent or environmental contamination, or taxonomic assignment error.
 
 ## What Celltaminate does
 
@@ -20,7 +16,7 @@ Celltaminate integrates multiple evidence layers into a 0-100 score:
 - curated kitome/background organisms;
 - curated clinically important pathogens.
 
-Lower Celltaminate scores indicate stronger support for a likely true microbial signal. Higher scores indicate stronger support for likely false-positive or background signal. By default, scores `<= 5` are treated as likely true, scores `>= 75` are treated as likely false positive/background, and intermediate scores are treated as uncertain.
+Lower Celltaminate scores indicate stronger support for a likely true microbial signal. Higher scores indicate stronger support for likely false-positive or background signal.
 
 ## Quick start
 
@@ -102,7 +98,7 @@ The command-line script accepts either `--input_files` or `--input_list` directl
 
 ## Output files
 
-A standard run writes:
+A standard Celltaminate run writes:
 
 ```text
 celltaminate_results/
@@ -116,26 +112,15 @@ celltaminate_results/
 └── run_summary.tsv
 ```
 
-The most important user-facing table is usually the per-sample taxa table in `tables/per_sample/`.
+The most important result table is usually the per-sample taxa table in `tables/per_sample/`.
 
 ## Reference data
 
-The full `refined_cell.lines.tsv` reference background table is available from Zenodo:
+The `refined_cell.lines.tsv` reference background table is available from Zenodo:
 
 ```text
 DOI: 10.5281/zenodo.20560460
 ```
-
-This repository includes `data/reference/refined_cell.lines.example.tsv`, a small example table for testing the example workflow. Real analyses should use the full Zenodo-hosted table.
-
-## Figures
-
-Manuscript-derived figures are included under `docs/assets/`:
-
-- `docs/assets/figure1_celltaminate_overview.png`
-- `docs/assets/figure2_benchmarking.png`
-- `docs/assets/figure3_clinical_applications.png`
-- `docs/assets/supplementary_figure1_scoring_details.png`
 
 ## Documentation
 
@@ -150,12 +135,4 @@ Manuscript-derived figures are included under `docs/assets/`:
 
 ## Citation
 
-A formal citation should be added after the manuscript is posted or published. For now, cite the repository and manuscript as:
-
-```text
-Sirajee AS, Ghaddar B, De S. Celltaminate: A Bioinformatic Pipeline for Rapid Detection of Pathogenic Microorganisms. Manuscript in preparation.
-```
-
-## Important limitation
-
-Celltaminate is a research software tool. It is not cleared or approved as a standalone clinical diagnostic device. Clinical interpretation should be performed by qualified personnel using validated laboratory and clinical workflows.
+A formal citation will be added after the manuscript is published.
