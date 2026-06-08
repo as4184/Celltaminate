@@ -20,7 +20,7 @@ docker run --rm celltaminate:latest --help
 To run local data with Docker:
 
 ```bash
-docker run --rm -v "$PWD":/work -w /work celltaminate:latest run       --input-list examples/lung_nanopore/input_list.txt       --metadata examples/lung_nanopore/metadata.tsv       --outdir examples/lung_nanopore/results       --use-example-reference
+docker run --rm -v "$PWD":/work -w /work celltaminate:latest run   --input-list examples/lung_nanopore/input_list.txt   --metadata examples/lung_nanopore/metadata.tsv   --outdir examples/lung_nanopore/results   --ref-bg-tsv data/reference/refined_cell.lines.tsv
 ```
 
 ## Apptainer

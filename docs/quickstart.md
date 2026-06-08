@@ -15,13 +15,7 @@ Download the full reference background table from Zenodo before running Celltami
 bin/celltaminate download-reference --out data/reference/refined_cell.lines.tsv
 ```
 
-Alternatively:
-
-```bash
-mkdir -p data/reference
-curl -L -o data/reference/refined_cell.lines.tsv \
-  "https://zenodo.org/records/20560460/files/refined_cell.lines.tsv?download=1"
-```
+If the helper cannot resolve the file URL, download `refined_cell.lines.tsv` manually from the Zenodo DOI landing page and place it at `data/reference/refined_cell.lines.tsv`.
 
 DOI: `10.5281/zenodo.20560460`
 

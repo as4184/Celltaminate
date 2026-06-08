@@ -14,7 +14,9 @@ import os
 import shutil
 import subprocess
 import sys
+import json
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Iterable, List, Optional
@@ -105,10 +107,6 @@ def bundled_panel(filename: str) -> Optional[Path]:
     p = repo_root() / "data" / "panels" / filename
     return p if p.exists() else None
 
-
-def bundled_reference_example() -> Optional[Path]:
-    p = repo_root() / "data" / "reference" / "refined_cell.lines.example.tsv"
-    return p if p.exists() else None
 
 
 def write_absolute_input_list(outdir: Path, reports: List[Path]) -> Path:
@@ -232,10 +230,6 @@ def cmd_run(parsed: argparse.Namespace) -> int:
     else:
         parsed.clinical_panel_tsv = existing_file(parsed.clinical_panel_tsv, "clinical panel TSV")
 
-    if parsed.use_example_reference and parsed.ref_bg_tsv is None:
-        parsed.ref_bg_tsv = bundled_reference_example()
-        if parsed.ref_bg_tsv is None:
-            raise SystemExit("ERROR: bundled example reference table was not found")
 
     validate_metadata(parsed.metadata, [p.name for p in reports_unique])
     absolute_input_list = write_absolute_input_list(parsed.outdir, reports_unique)
@@ -270,11 +264,72 @@ def cmd_init(parsed: argparse.Namespace) -> int:
 
 
 
+def candidate_reference_urls(primary_url: str, doi: str = REFERENCE_DOI) -> List[str]:
+    """Return candidate URLs for the reference TSV.
+
+    The default direct Zenodo file URL is fastest when the record is public and
+    the file name is exactly refined_cell.lines.tsv. If that URL changes, the
+    function also attempts the Zenodo records API using the numeric DOI suffix.
+    """
+    urls: List[str] = []
+    if primary_url:
+        urls.append(primary_url)
+
+    record_id = doi.rstrip("/").split(".")[-1]
+    if record_id.isdigit():
+        api_url = f"https://zenodo.org/api/records/{record_id}"
+        try:
+            request = urllib.request.Request(api_url, headers={"User-Agent": "Celltaminate reference downloader"})
+            with urllib.request.urlopen(request, timeout=30) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            files = payload.get("files", []) or []
+            ranked = []
+            for f in files:
+                key = str(f.get("key") or f.get("filename") or "")
+                links = f.get("links", {}) or {}
+                link = links.get("self") or links.get("download")
+                size = int(f.get("size") or 0)
+                if not link:
+                    continue
+                score = 0
+                if key == "refined_cell.lines.tsv":
+                    score += 100
+                if key.endswith(".tsv"):
+                    score += 10
+                ranked.append((score, size, link))
+            for _, _, link in sorted(ranked, reverse=True):
+                if link not in urls:
+                    urls.append(link)
+        except Exception:
+            pass
+    return urls
+
+
+def download_file(url: str, out: Path) -> None:
+    tmp = out.with_suffix(out.suffix + ".tmp")
+    request = urllib.request.Request(url, headers={"User-Agent": "Celltaminate reference downloader"})
+    with urllib.request.urlopen(request) as response, tmp.open("wb") as handle:
+        total_raw = response.headers.get("Content-Length")
+        total = int(total_raw) if total_raw and total_raw.isdigit() else None
+        copied = 0
+        while True:
+            chunk = response.read(1024 * 1024)
+            if not chunk:
+                break
+            handle.write(chunk)
+            copied += len(chunk)
+            if total:
+                pct = 100 * copied / total
+                print(f"Downloaded {copied / (1024 ** 2):.1f} / {total / (1024 ** 2):.1f} MB ({pct:.1f}%)", end="\n")
+            else:
+                print(f"Downloaded {copied / (1024 ** 2):.1f} MB", end="\n")
+    print()
+    tmp.replace(out)
+
+
 def cmd_download_reference(parsed: argparse.Namespace) -> int:
     out = Path(parsed.out).expanduser().resolve()
     out.parent.mkdir(parents=True, exist_ok=True)
-    tmp = out.with_suffix(out.suffix + ".tmp")
-    request = urllib.request.Request(parsed.url, headers={"User-Agent": "Celltaminate reference downloader"})
 
     print(f"Downloading reference background table from DOI {REFERENCE_DOI}")
     print(f"Output: {out}")
@@ -282,31 +337,25 @@ def cmd_download_reference(parsed: argparse.Namespace) -> int:
     if out.exists() and not parsed.force:
         raise SystemExit(f"ERROR: output already exists: {out}\nUse --force to overwrite it.")
 
-    try:
-        with urllib.request.urlopen(request) as response, tmp.open("wb") as handle:
-            total_raw = response.headers.get("Content-Length")
-            total = int(total_raw) if total_raw and total_raw.isdigit() else None
-            copied = 0
-            while True:
-                chunk = response.read(1024 * 1024)
-                if not chunk:
-                    break
-                handle.write(chunk)
-                copied += len(chunk)
-                if total:
-                    pct = 100 * copied / total
-                    print(f"Downloaded {copied / (1024 ** 2):.1f} / {total / (1024 ** 2):.1f} MB ({pct:.1f}%)", end="\r")
-                else:
-                    print(f"Downloaded {copied / (1024 ** 2):.1f} MB", end="\r")
-        print()
-        tmp.replace(out)
-    except (urllib.error.URLError, urllib.error.HTTPError, OSError) as exc:
-        if tmp.exists():
-            tmp.unlink()
-        raise SystemExit(f"ERROR: failed to download reference table: {exc}") from exc
+    last_error = None
+    for url in candidate_reference_urls(parsed.url):
+        tmp = out.with_suffix(out.suffix + ".tmp")
+        try:
+            print(f"Trying: {url}")
+            download_file(url, out)
+            print(f"Reference table written to: {out}")
+            return 0
+        except (urllib.error.URLError, urllib.error.HTTPError, OSError) as exc:
+            last_error = exc
+            if tmp.exists():
+                tmp.unlink()
 
-    print(f"Reference table written to: {out}")
-    return 0
+    raise SystemExit(
+        "ERROR: failed to download reference table. "
+        f"Last error: {last_error}\n"
+        "Confirm that DOI 10.5281/zenodo.20560460 is public and that the file name is refined_cell.lines.tsv, "
+        "or pass an explicit --url from the Zenodo file download link."
+    )
 
 
 def cmd_from_fastq(parsed: argparse.Namespace) -> int:
@@ -344,7 +393,6 @@ def make_parser() -> argparse.ArgumentParser:
     run.add_argument("--fp-true-cutoff", type=float, default=5)
     run.add_argument("--fp-aggressiveness", type=float, default=1.15)
     run.add_argument("--ref-bg-tsv", help="Full reference background TSV. Recommended for real analyses.")
-    run.add_argument("--use-example-reference", action="store_true", help="Use the small bundled example reference table. Not recommended for real analyses.")
     run.add_argument("--kitome-blacklist-tsv", help="Kitome/background blacklist TSV. Defaults to the bundled panel.")
     run.add_argument("--clinical-panel-tsv", help="Clinically important pathogen TSV. Defaults to the bundled panel.")
     run.add_argument("--protected-taxa-tsv", help="Optional TSV with sample and taxon columns")
@@ -380,6 +428,13 @@ def make_parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
+    # Pass all arguments after `from-fastq` directly to the full workflow script.
+    # This avoids argparse treating workflow options such as --samplesheet as
+    # unknown options of the lightweight wrapper.
+    if len(sys.argv) >= 2 and sys.argv[1] == "from-fastq":
+        workflow_args = sys.argv[2:] if len(sys.argv) > 2 else ["--help"]
+        return cmd_from_fastq(argparse.Namespace(workflow_args=workflow_args))
+
     parser = make_parser()
     parsed = parser.parse_args()
     return parsed.func(parsed)

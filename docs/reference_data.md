@@ -20,13 +20,7 @@ Download it before running an analysis:
 bin/celltaminate download-reference --out data/reference/refined_cell.lines.tsv
 ```
 
-Alternatively:
-
-```bash
-mkdir -p data/reference
-curl -L -o data/reference/refined_cell.lines.tsv \
-  "https://zenodo.org/records/20560460/files/refined_cell.lines.tsv?download=1"
-```
+If the helper cannot resolve the file URL, download `refined_cell.lines.tsv` manually from the Zenodo DOI landing page and place it at `data/reference/refined_cell.lines.tsv`.
 
 Then pass the file like this:
 

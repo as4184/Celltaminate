@@ -23,3 +23,11 @@
 - Added `bin/celltaminate download-reference` helper.
 
 - Revised the FASTQ workflow to run Kraken2 with explicit FASTQ input handling, optional compression flags, and minimizer-enhanced reports by default.
+
+
+## Unreleased
+
+- Fix GitHub Actions smoke test after reference example removal.
+- Remove stale `--use-example-reference` wrapper option.
+- Remove accidentally committed Python bytecode cache files.
+- Make the Zenodo reference downloader more robust to direct-file URL changes.
