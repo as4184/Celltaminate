@@ -2,117 +2,105 @@
 
 **Celltaminate** (**C**ontamination **E**valuation for **L**ow-Level **T**axon-**A**bundance in **M**icrobial **I**nference with **N**oise-**A**ware **T**riage **E**stimate) is an R-based command-line and Shiny application for contamination-aware prioritization of microbial taxa from host-dominated sequencing data.
 
-Celltaminate starts from **Kraken2** or **KrakenUniq** taxonomic reports, and adds a second interpretation layer that asks whether each detected microbial taxon behaves more like a true signal or more like reagent or environmental contamination, or taxonomic assignment error.
+Celltaminate starts from Kraken2 or KrakenUniq taxonomic reports and evaluates whether each microbial taxon is supported by quantitative sequence evidence or is more consistent with recurrent background, contamination, or taxonomic ambiguity.
 
-## What Celltaminate does
+## Scoring framework
 
-Celltaminate integrates multiple evidence layers into a 0-100 score:
+The deployed score integrates retained evidence from:
 
-- read support and normalized microbial abundance;
-- unique k-mer or minimizer support when available;
-- reference background abundance from sterile human cell-line profiles;
-- cohort recurrence and optional matched control prevalence;
-- taxonomic ambiguity from the Kraken tree structure;
-- curated kitome/background organisms;
-- curated clinically important pathogens.
+- clade-read and RPMM support;
+- unique k-mer support and taxonomic ambiguity;
+- sterile-reference prevalence, abundance, and abundance quantiles;
+- background-subtracted abundance and decontamination ratio;
+- curated clinically important pathogen and kitome/background panels;
+- selected interaction terms between these evidence layers.
 
-Lower Celltaminate scores indicate stronger support for a likely true microbial signal. Higher scores indicate stronger support for likely false-positive or background signal.
+The score ranges from 0 to 100. Lower scores indicate stronger support for prioritization. The default prioritization threshold is **score <= 1**. The software also retains an intermediate uncertain range and a high-score background category for users who want three-tier calls.
+
+## Installation
+
+Clone the repository and create the conda environment:
+
+```bash
+git clone https://github.com/as4184/Celltaminate.git
+cd Celltaminate
+conda env create -f environment.yml
+conda activate celltaminate
+bin/celltaminate --help
+```
+
+The full sterile-reference background table is distributed separately through Zenodo:
+
+```text
+DOI: 10.5281/zenodo.20560460
+```
+
+Download it into the expected repository location:
+
+```bash
+bin/celltaminate download-reference
+```
 
 ## Quick start
 
-Create the conda environment:
-
-```bash
-conda env create -f environment.yml
-conda activate celltaminate
-```
-
-Download the full reference background table from Zenodo and place it in `data/reference/`:
-
-```bash
-bin/celltaminate download-reference --out data/reference/refined_cell.lines.tsv
-```
-
-If the helper cannot resolve the file URL, download `refined_cell.lines.tsv` manually from the Zenodo DOI landing page and place it at `data/reference/refined_cell.lines.tsv`.
-
-Run the bundled example:
+Run the bundled Kraken-report example:
 
 ```bash
 bash examples/lung_nanopore/run_example.sh
 ```
 
-Run your own reports:
+Run Celltaminate on your own reports:
 
 ```bash
 bin/celltaminate run \
   --reports sample1.kraken.report.txt sample2.kraken.report.txt \
   --metadata metadata.tsv \
-  --outdir celltaminate_results \
-  --tax-level S \
-  --ref-bg-tsv data/reference/refined_cell.lines.tsv
+  --outdir celltaminate_results
 ```
 
-Run from an input list:
+Or provide one report path per line:
 
 ```bash
 bin/celltaminate run \
   --input-list input_list.txt \
   --metadata metadata.tsv \
-  --outdir celltaminate_results \
-  --tax-level S \
-  --ref-bg-tsv data/reference/refined_cell.lines.tsv
+  --outdir celltaminate_results
 ```
 
-Launch the Shiny app:
+The bundled kitome/background and clinical-pathogen panels are loaded automatically. If `data/reference/refined_cell.lines.tsv` is present, the reference background table is also loaded automatically.
+
+## Shiny application
+
+Launch the interactive application with:
 
 ```bash
 bin/celltaminate app
 ```
 
-## Starting from FASTQ files
+The Shiny interface accepts Kraken2 or KrakenUniq reports and provides interactive score summaries, taxon tables, abundance views, and contextual taxon information.
 
-Celltaminate runs on Kraken2/KrakenUniq report files. If you are starting from FASTQ files, generate Kraken2 reports first, or use the full workflow helper:
-
-```bash
-python scripts/celltaminate_full_workflow.py \
-  --samplesheet samples.tsv \
-  --kraken2-db /path/to/kraken2_database \
-  --outdir celltaminate_full_run \
-  --threads 16 \
-  --report-minimizer-data \
-  --ref-bg-tsv data/reference/refined_cell.lines.tsv
-```
-
-The FASTQ samplesheet format is documented in [FASTQ to Celltaminate workflow](docs/full_fastq_workflow.md). The same workflow can be launched through:
-
-```bash
-bin/celltaminate from-fastq --samplesheet samples.tsv --kraken2-db /path/to/kraken2_database --outdir celltaminate_full_run
-```
-
-## Minimal metadata format
-
-`metadata.tsv` must be tab-separated:
-
-```text
-sample	group	sample_type	is_control
-S6.kraken.report.txt	full	Nanopore	FALSE
-```
-
-The `sample` value must match the Kraken report basename. For example, if the report path is `/data/S6.kraken.report.txt`, the metadata sample value should be `S6.kraken.report.txt`.
-
-## Input files
+## Input
 
 Celltaminate accepts:
 
 - Kraken2 6-column reports;
-- Kraken2 8-column reports;
+- Kraken2 8-column reports generated with minimizer data;
 - KrakenUniq 8-column reports.
 
-The command-line script accepts either `--input_files` or `--input_list` directly, but most users should call it through `bin/celltaminate run`.
+Eight-column reports are preferred because unique k-mer/minimizer support is part of the fitted scoring model.
 
-## Output files
+Optional metadata must be tab-separated and contain:
 
-A standard Celltaminate run writes:
+```text
+sample	group	sample_type	is_control
+sample1.kraken.report.txt	Group 1	Clinical	FALSE
+```
+
+The `sample` value must match the report basename.
+
+## Output
+
+A standard run creates:
 
 ```text
 celltaminate_results/
@@ -123,31 +111,36 @@ celltaminate_results/
 ├── plots/
 ├── cleaned_reports/
 ├── cleaned_reanalysis/
+├── run_config/
 └── run_summary.tsv
 ```
 
-The most important result table is usually the per-sample taxa table in `tables/per_sample/`.
+The per-sample taxa tables contain the main taxon-level evidence, Celltaminate score, and call.
 
-## Reference data
+## Containers
 
-The `refined_cell.lines.tsv` reference background table is available from Zenodo:
+A Dockerfile and Apptainer definition are included for containerized execution.
 
-```text
-DOI: 10.5281/zenodo.20560460
+```bash
+docker build -t celltaminate:latest .
+docker run --rm celltaminate:latest --help
 ```
 
 ## Documentation
 
 - [Installation](docs/installation.md)
 - [Quick start](docs/quickstart.md)
-- [FASTQ to Celltaminate workflow](docs/full_fastq_workflow.md)
 - [Input formats](docs/input_formats.md)
 - [Output files](docs/output_files.md)
 - [Reference data](docs/reference_data.md)
 - [Score interpretation](docs/scoring.md)
-- [Shiny app](docs/shiny_app.md)
+- [Shiny application](docs/shiny_app.md)
 - [Troubleshooting](docs/troubleshooting.md)
 
-## Citation
+## Citation metadata
 
-A formal citation will be added after the manuscript is published.
+See [`CITATION.cff`](CITATION.cff).
+
+## License
+
+See [`LICENSE.md`](LICENSE.md).
