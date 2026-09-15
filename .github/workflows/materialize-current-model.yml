@@ -1,0 +1,41 @@
+name: materialize-current-model
+
+on:
+  push:
+    branches: [ cleanup-current-model ]
+    paths:
+      - '.update_payload/READY'
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: cleanup-current-model
+          fetch-depth: 0
+
+      - name: Reconstruct current source files
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .update_payload/cli.* | base64 -d | gzip -d > scripts/Celltaminate.R
+          cat .update_payload/app.* | base64 -d | gzip -d > app/Celltaminate_app.R
+          test -s scripts/Celltaminate.R
+          test -s app/Celltaminate_app.R
+          rm -rf .update_payload
+          rm -f .github/workflows/materialize-current-model.yml
+
+      - name: Commit reconstructed files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add scripts/Celltaminate.R app/Celltaminate_app.R .update_payload .github/workflows/materialize-current-model.yml || true
+          git add -u
+          git commit -m 'Update current Celltaminate model and app'
+          git push origin HEAD:cleanup-current-model
