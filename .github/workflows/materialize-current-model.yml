@@ -1,0 +1,42 @@
+name: materialize-current-model
+
+on:
+  push:
+    branches: [ cleanup-current-model ]
+    paths:
+      - '.upload_cli/READY2'
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: cleanup-current-model
+          fetch-depth: 0
+
+      - name: Reconstruct and verify Celltaminate.R
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .upload_cli/part00 .upload_cli/part01 .upload_cli/part02 .upload_cli/part03 \
+            | base64 -d | gzip -d > scripts/Celltaminate.R
+          test "$(git hash-object scripts/Celltaminate.R)" = "90c837776a9b6599d848f3a5e637fd2b2829d774"
+          rm -rf .upload_cli
+          rm -rf .update_payload
+          rm -f .github/workflows/materialize-cli.yml
+          rm -f .github/workflows/materialize-current-model.yml
+
+      - name: Commit verified source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add scripts/Celltaminate.R
+          git add -u
+          git commit -m 'Update current Celltaminate model'
+          git push origin HEAD:cleanup-current-model
