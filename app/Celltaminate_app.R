@@ -865,187 +865,434 @@ js_divergence <- function(p, q, eps = 1e-12) {
   0.5 * kl(p, m) + 0.5 * kl(q, m)
 }
 
-ref_fp_component <- function(obs_log, q50, q95, q99, n, min_n = 10) {
-  out <- rep(0.5, length(obs_log))
-  ok <- is.finite(obs_log) & is.finite(q50) & is.finite(q95) & is.finite(q99) & is.finite(n) & n >= min_n
-  if (!any(ok)) return(out)
-
-  o <- obs_log[ok]
-  a <- q50[ok]
-  b <- q95[ok]
-  c <- q99[ok]
-  val <- rep(0.5, length(o))
-
-  val[o <= a] <- 0.85
-
-  mid1 <- (o > a) & (o <= b) & (b > a)
-  val[mid1] <- 0.85 - (0.85 - 0.35) * ((o[mid1] - a[mid1]) / (b[mid1] - a[mid1]))
-
-  mid2 <- (o > b) & (o <= c) & (c > b)
-  val[mid2] <- 0.35 - (0.35 - 0.15) * ((o[mid2] - b[mid2]) / (c[mid2] - b[mid2]))
-
-  val[o > c] <- 0.05
-  out[ok] <- pmin(pmax(val, 0), 1)
-  out
-}
-
-fp_low_by_mid <- function(x, mid, slope = 0.8) {
-  x <- suppressWarnings(as.numeric(x))
-  x[!is.finite(x)] <- 0
-  x <- pmax(x, 0)
-  plogis((log1p(mid) - log1p(x)) / slope)
-}
-
-fp_low_linear <- function(x, mid, slope = 0.2) {
-  x <- suppressWarnings(as.numeric(x))
-  x[!is.finite(x)] <- NA_real_
-  out <- rep(0.5, length(x))
-  ok <- is.finite(x)
-  out[ok] <- plogis((mid - x[ok]) / slope)
-  out
-}
-
-fp_weights <- function(mode) {
+final_score_model <- function() {
+  feature_names <- c(
+    "reads_support",
+    "rpmm_support",
+    "uniq_kmer_support",
+    "kmer_per_read_support",
+    "ambiguity_unresolved_fraction",
+    "ambiguity_species_nondominance",
+    "reference_prevalence",
+    "reference_median_abundance",
+    "reference_relative_abundance",
+    "reference_at_or_below_q99",
+    "reference_at_or_below_q95",
+    "reference_at_or_below_q50",
+    "decontaminated_abundance",
+    "decontamination_ratio",
+    "kitome_only",
+    "kitome_clinical_overlap",
+    "clinical_membership",
+    "low_biomass_context",
+    "reference_like_sample_composition",
+    "clinical_x_decon_support",
+    "kitome_only_x_decon_support",
+    "kitome_overlap_x_decon_support",
+    "reference_prevalence_x_low_enrichment",
+    "unresolved_ambiguity_x_kmer_support",
+    "species_nondominance_x_kmer_support"
+  )
+  
   list(
-    base_prior = 0.8,
-    w_low_reads = 1.0,
-    w_low_rpmm = 0.95,
-    w_low_kmer = 1.2,
-    w_ref_bg = 1.0,
-    w_ref_prev = 0.9,
-    w_fc_ref = 1.0,
-    w_ctrl_enrich = 1.3,
-    w_ctrl_prev = 0.9,
-    w_cohort_prev = 1.5,
-    w_common_bg = 1.5,
-    w_ubiq = 1.0,
-    w_biomass = 0.8,
-    w_nonmicrobe_corr = 0.6,
-    w_decon = 0.9,
-    w_decon_ratio = 1.4,
-    w_ambig = 0.8,
-    w_kitome = 3.0,
-    w_user = 0.7,
-    w_clinical = 2.0,
-    prior_biomass_weight = 0.08,
-    prior_js_weight = 0.08
+    feature_names = feature_names,
+    
+    intercept = 1.4925028628700236,
+    
+    score_offset = -4.9116688158923365,
+    
+    impute_values = setNames(
+      c(
+        -4.037345601140845,
+        -5.560973858316463,
+        -6.791598579642281,
+        -2.868097637369349,
+        0.13617358617707387,
+        0.3418085172884586,
+        0.5147502612680851,
+        3.9850698122986192,
+        -1.5728884233552725,
+        0.8623956126137355,
+        0.8000747849931447,
+        0.16708213885080395,
+        -4.451715457237202,
+        -0.5715219157760044,
+        0.1524074074074074,
+        0.057901234567901236,
+        -0.1365432098765432,
+        0.0,
+        -0.8760988289857169,
+        -0.6162082363065745,
+        -0.6411394789276108,
+        -0.21839854637573825,
+        0.09053060438834876,
+        -0.8806494090358415,
+        -2.1563274408371043
+      ),
+      feature_names
+    ),
+    
+    means = setNames(
+      c(
+        -4.037345601140845,
+        -5.560973858316463,
+        -6.791598579642281,
+        -2.868097637369349,
+        0.13617358617707384,
+        0.3418085172884586,
+        0.5147502612680849,
+        3.9850698122986192,
+        -1.5728884233552725,
+        0.8623956126137355,
+        0.8000747849931447,
+        0.16708213885080392,
+        -4.451715457237202,
+        -0.5715219157760044,
+        0.1524074074074074,
+        0.057901234567901236,
+        -0.1365432098765432,
+        0.0,
+        -0.8760988289857169,
+        -0.6162082363065745,
+        -0.6411394789276108,
+        -0.21839854637573825,
+        0.09053060438834876,
+        -0.8806494090358415,
+        -2.1563274408371043
+      ),
+      feature_names
+    ),
+    
+    scales = setNames(
+      c(
+        1.5128497297793833,
+        2.150800601166756,
+        1.5801497288378767,
+        0.7665211438955583,
+        0.16611865990321514,
+        0.283347787544235,
+        0.2586009543782396,
+        1.4482795250848732,
+        2.159788578677823,
+        0.3428430077184419,
+        0.3980383930748458,
+        0.37127182030409095,
+        2.974864934519208,
+        0.3576872461912685,
+        0.3594153441003318,
+        0.2335565918646145,
+        0.3433644735745873,
+        1.0,
+        0.037336150006150516,
+        2.1033078430172503,
+        1.9433149640003147,
+        1.3129930478842984,
+        0.37318236981981967,
+        1.1019121244936676,
+        1.7770162314781006
+      ),
+      feature_names
+    ),
+    
+    standardized_weights = setNames(
+      c(
+        0.25588616843532014,
+        0.015857076698091055,
+        0.23738110321065942,
+        0.0,
+        0.0,
+        0.13855067199962626,
+        0.011924245703707377,
+        0.1542911530541554,
+        0.1201126650864708,
+        0.14623256321543165,
+        0.11672991539965896,
+        0.04072473708446774,
+        0.0684245954292958,
+        0.11686135228472111,
+        0.0,
+        0.027464346253092846,
+        0.207776863730765,
+        0.0,
+        0.0,
+        0.2429811424456025,
+        0.1631094360713755,
+        0.0,
+        0.07293897105982951,
+        0.13037149291281877,
+        0.0
+      ),
+      feature_names
+    )
   )
 }
 
 compute_sample_priors <- function(gs_long, meta_df, params, ref_comp_genus = NULL) {
-  w <- fp_weights(params$analysis_mode)
-
   df0 <- gs_long %>%
     distinct(sample, total_reads, microbial_reads) %>%
     mutate(
       log_microbial_reads = safe_log10(microbial_reads + 1),
       biomass_scaled = scale01(log_microbial_reads)
     )
-
-  js_df <- df0 %>% mutate(js_div = NA_real_)
-
+  
+  js_df <- df0 %>%
+    mutate(
+      js_div = NA_real_
+    )
+  
   if (!is.null(ref_comp_genus) && nrow(ref_comp_genus) > 0) {
     ref_vec <- ref_comp_genus %>%
       filter(is.finite(ref_p), ref_p > 0) %>%
-      select(genus = name_clean, ref_p)
-
+      select(
+        genus = name_clean,
+        ref_p
+      )
+    
     samp_genus <- gs_long %>%
-      filter(rank == "G", is_microbial, !is_host, !is_plant, is.finite(rpmm), rpmm > 0) %>%
-      group_by(sample, genus = name_clean) %>%
-      summarise(rpmm = sum(rpmm, na.rm = TRUE), .groups = "drop")
-
+      filter(
+        rank == "G",
+        is_microbial,
+        !is_host,
+        !is_plant,
+        is.finite(rpmm),
+        rpmm > 0
+      ) %>%
+      group_by(
+        sample,
+        genus = name_clean
+      ) %>%
+      summarise(
+        rpmm = sum(rpmm, na.rm = TRUE),
+        .groups = "drop"
+      )
+    
     if (nrow(samp_genus) > 0) {
       js_calc <- samp_genus %>%
         group_by(sample) %>%
-        group_modify(~{
-          d <- .x
-          p <- d$rpmm
-          p[!is.finite(p)] <- 0
-          names(p) <- d$genus
-          if (sum(p) <= 0) return(tibble(js_div = NA_real_))
-          p <- p / sum(p)
-
-          all_g <- union(names(p), ref_vec$genus)
-          p2 <- rep(0, length(all_g))
-          names(p2) <- all_g
-          q2 <- rep(0, length(all_g))
-          names(q2) <- all_g
-
-          p2[names(p)] <- p
-          q2[ref_vec$genus] <- ref_vec$ref_p
-          qsum <- sum(q2)
-
-          if (!is.finite(qsum) || qsum <= 0) return(tibble(js_div = NA_real_))
-          q2 <- q2 / qsum
-          tibble(js_div = js_divergence(p2, q2))
-        }) %>%
+        group_modify(
+          ~{
+            d <- .x
+            
+            p <- d$rpmm
+            p[!is.finite(p)] <- 0
+            names(p) <- d$genus
+            
+            if (sum(p) <= 0) {
+              return(
+                tibble(
+                  js_div = NA_real_
+                )
+              )
+            }
+            
+            p <- p / sum(p)
+            
+            all_g <- union(
+              names(p),
+              ref_vec$genus
+            )
+            
+            p2 <- rep(
+              0,
+              length(all_g)
+            )
+            names(p2) <- all_g
+            
+            q2 <- rep(
+              0,
+              length(all_g)
+            )
+            names(q2) <- all_g
+            
+            p2[names(p)] <- p
+            q2[ref_vec$genus] <- ref_vec$ref_p
+            
+            qsum <- sum(q2)
+            
+            if (!is.finite(qsum) || qsum <= 0) {
+              return(
+                tibble(
+                  js_div = NA_real_
+                )
+              )
+            }
+            
+            q2 <- q2 / qsum
+            
+            tibble(
+              js_div = js_divergence(
+                p2,
+                q2
+              )
+            )
+          }
+        ) %>%
         ungroup()
-
+      
       js_df <- df0 %>%
-        left_join(js_calc, by = "sample")
+        left_join(
+          js_calc,
+          by = "sample"
+        )
     }
   }
-
-  js_df <- js_df %>%
-    mutate(
-      js_div = if_else(is.finite(js_div), js_div, NA_real_)
-    )
-
-  prior_fp <- w$base_prior +
-    (w$prior_biomass_weight * (1 - coalesce(js_df$biomass_scaled, 0.5))) +
-    (w$prior_js_weight * (1 - coalesce(js_df$js_div, 0.5)))
-
-  prior_fp <- cap(prior_fp, 0.05, 0.95)
-
+  
   js_df %>%
-    mutate(prior_fp = prior_fp) %>%
-    select(sample, biomass_scaled, js_div, prior_fp)
+    mutate(
+      js_div = if_else(
+        is.finite(js_div),
+        js_div,
+        NA_real_
+      )
+    ) %>%
+    select(
+      sample,
+      biomass_scaled,
+      js_div
+    )
 }
 
 compute_ambiguity_index <- function(gs_long) {
   base <- gs_long %>%
-    filter(rank %in% c("G", "S"), is_microbial, !is_host, !is_plant)
-
+    filter(
+      rank %in% c("G", "S"),
+      is_microbial,
+      !is_host,
+      !is_plant
+    )
+  
   if (nrow(base) == 0) {
-    return(tibble(sample = character(0), rank = character(0), name_clean = character(0), ambig_index = numeric(0)))
+    return(
+      tibble(
+        sample = character(0),
+        rank = character(0),
+        name_clean = character(0),
+        ambiguity_unresolved_fraction = numeric(0),
+        ambiguity_species_nondominance = numeric(0)
+      )
+    )
   }
-
+  
   genus_rows <- base %>%
     filter(rank == "G") %>%
-    transmute(sample, genus = name_clean, genus_clade = reads_clade, genus_direct = reads_direct)
-
+    transmute(
+      sample,
+      genus = name_clean,
+      genus_clade = suppressWarnings(
+        as.numeric(reads_clade)
+      ),
+      genus_direct = suppressWarnings(
+        as.numeric(reads_direct)
+      )
+    )
+  
   sp_sum <- base %>%
     filter(rank == "S") %>%
-    group_by(sample, genus) %>%
+    mutate(
+      species_direct_nonnegative = pmax(
+        coalesce0(reads_direct),
+        0
+      )
+    ) %>%
+    group_by(
+      sample,
+      genus
+    ) %>%
     summarise(
-      sp_total_direct = sum(reads_direct, na.rm = TRUE),
-      top_species = name_clean[which.max(reads_direct)[1]],
-      top_reads = max(reads_direct, na.rm = TRUE),
-      top_frac = if_else(sp_total_direct > 0, top_reads / sp_total_direct, NA_real_),
+      sp_total_direct = sum(
+        species_direct_nonnegative,
+        na.rm = TRUE
+      ),
+      top_reads = max(
+        species_direct_nonnegative,
+        na.rm = TRUE
+      ),
+      top_frac = if_else(
+        sp_total_direct > 0,
+        top_reads / sp_total_direct,
+        NA_real_
+      ),
       .groups = "drop"
     )
-
+  
   sp_out <- base %>%
     filter(rank == "S") %>%
-    left_join(sp_sum, by = c("sample", "genus")) %>%
-    left_join(genus_rows, by = c("sample", "genus")) %>%
-    mutate(
-      direct_frac = if_else(is.finite(genus_clade) & genus_clade > 0, genus_direct / genus_clade, NA_real_),
-      ambig_index = 0.5 * coalesce0(direct_frac) + 0.5 * (1 - coalesce(top_frac, 1)),
-      ambig_index = cap(ambig_index, 0, 1)
+    left_join(
+      sp_sum,
+      by = c(
+        "sample",
+        "genus"
+      )
     ) %>%
-    select(sample, rank, name_clean, ambig_index)
-
+    left_join(
+      genus_rows,
+      by = c(
+        "sample",
+        "genus"
+      )
+    ) %>%
+    mutate(
+      ambiguity_unresolved_fraction = if_else(
+        is.finite(genus_clade) &
+          genus_clade > 0 &
+          is.finite(genus_direct),
+        cap(
+          genus_direct / genus_clade,
+          0,
+          1
+        ),
+        NA_real_
+      ),
+      
+      ambiguity_species_nondominance = if_else(
+        is.finite(top_frac),
+        cap(
+          1 - top_frac,
+          0,
+          1
+        ),
+        NA_real_
+      )
+    ) %>%
+    select(
+      sample,
+      rank,
+      name_clean,
+      ambiguity_unresolved_fraction,
+      ambiguity_species_nondominance
+    )
+  
   g_out <- genus_rows %>%
     mutate(
       rank = "G",
       name_clean = genus,
-      ambig_index = if_else(is.finite(genus_clade) & genus_clade > 0, genus_direct / genus_clade, 0),
-      ambig_index = cap(ambig_index, 0, 1)
+      
+      ambiguity_unresolved_fraction = if_else(
+        is.finite(genus_clade) &
+          genus_clade > 0 &
+          is.finite(genus_direct),
+        cap(
+          genus_direct / genus_clade,
+          0,
+          1
+        ),
+        NA_real_
+      ),
+      
+      ambiguity_species_nondominance = NA_real_
     ) %>%
-    select(sample, rank, name_clean, ambig_index)
-
-  bind_rows(g_out, sp_out)
+    select(
+      sample,
+      rank,
+      name_clean,
+      ambiguity_unresolved_fraction,
+      ambiguity_species_nondominance
+    )
+  
+  bind_rows(
+    g_out,
+    sp_out
+  )
 }
 
 # ------------------- Celltaminate Algorithm -----------------------------------------------------------
@@ -1260,129 +1507,372 @@ compute_taxon_features <- function(gs_long, meta_df, params, user_contam = chara
   )
 }
 
-center_fp_component <- function(x) {
-  2 * (x - 0.5)
-}
-
-compute_fp_components <- function(out, params) {
-  comp_low_reads <- fp_low_by_mid(out$reads_clade, mid = params$fp_mid_reads, slope = 0.9)
-  comp_low_rpmm <- fp_low_by_mid(out$rpmm, mid = params$fp_mid_rpmm, slope = 0.9)
-
-  comp_low_kmer <- {
-    c1 <- ifelse(is.na(out$uniq_kmers), 0.5, fp_low_by_mid(out$uniq_kmers, mid = params$fp_mid_uniq_kmers, slope = 0.9))
-    c2 <- ifelse(is.na(out$kmer_per_read), 0.5, fp_low_linear(out$kmer_per_read, mid = params$fp_mid_kmer_per_read, slope = 0.25))
-    pmax(c1, c2, na.rm = TRUE)
-  }
-
-  comp_ref_bg <- ifelse(
-    is.finite(out$ref_n) & out$ref_n >= 5 & is.finite(out$ref_med_rpmm),
-    ref_fp_component(out$log_rpmm, out$ref_q50_log, out$ref_q95_log, out$ref_q99_log, out$ref_n, min_n = 5),
-    0.5
+log1p_nonnegative_score <- function(x) {
+  x <- suppressWarnings(
+    as.numeric(x)
   )
-  comp_ref_prev <- ifelse(
-    is.finite(out$ref_prev),
-    0.5 + 0.5 * sqrt(cap(out$ref_prev, 0, 1)),
-    0.5
+  
+  out <- rep(
+    NA_real_,
+    length(x)
   )
-  comp_fc_ref <- ifelse(
-    is.finite(out$log2FC_vs_reference_median),
-    plogis((0 - out$log2FC_vs_reference_median) / 2.0),
-    0.5
-  )
-  comp_ctrl_enrich <- ifelse(
-    is.finite(out$control_median_rpmm) & is.finite(out$log2FC_vs_control_median),
-    plogis((1 - out$log2FC_vs_control_median) / 0.75),
-    0.5
-  )
-  comp_ctrl_prev <- ifelse(
-    is.finite(out$control_prevalence),
-    0.25 + 0.75 * sqrt(cap(out$control_prevalence, 0, 1)),
-    0.5
-  )
-  comp_cohort_prev <- 0.5 + 0.5 * sqrt(cap(coalesce0(out$prevalence_any), 0, 1))
-  comp_common_bg <- 0.5 + 0.5 * sqrt(cap(coalesce0(out$prevalence_any) * coalesce0(out$ref_prev), 0, 1))
-  comp_ubiq <- 0.5 + 0.5 * cap(coalesce0(out$ubiquity), 0, 1)
-  comp_biomass <- ifelse(is.na(out$cor_with_biomass), 0.5, plogis((-out$cor_with_biomass) / 0.25))
-  comp_nonmicrobe_corr <- ifelse(is.na(out$cor_with_nonmicrobe_frac), 0.5, plogis((out$cor_with_nonmicrobe_frac) / 0.25))
-  comp_decon <- fp_low_by_mid(out$decon_rpmm, mid = params$fp_mid_decon_rpmm, slope = 0.9)
-  comp_decon_ratio <- ifelse(
-    is.finite(out$decon_ratio),
-    cap(1 - out$decon_ratio, 0, 1),
-    0.5
-  )
-  comp_ambig <- 0.5 + 0.5 * coalesce0(out$ambig_index)
-  comp_kit <- ifelse(coalesce(out$in_kitome, FALSE), 0.92, 0.5)
-  comp_user <- ifelse(coalesce(out$in_user_contam, FALSE), 0.85, 0.5)
-  comp_clin <- ifelse(coalesce(out$in_clinical_panel, FALSE), 0.25, 0.5)
-
-  list(
-    comp_low_reads = comp_low_reads,
-    comp_low_rpmm = comp_low_rpmm,
-    comp_low_kmer = comp_low_kmer,
-    comp_ref_bg = comp_ref_bg,
-    comp_ref_prev = comp_ref_prev,
-    comp_fc_ref = comp_fc_ref,
-    comp_ctrl_enrich = comp_ctrl_enrich,
-    comp_ctrl_prev = comp_ctrl_prev,
-    comp_cohort_prev = comp_cohort_prev,
-    comp_common_bg = comp_common_bg,
-    comp_ubiq = comp_ubiq,
-    comp_biomass = comp_biomass,
-    comp_nonmicrobe_corr = comp_nonmicrobe_corr,
-    comp_decon = comp_decon,
-    comp_decon_ratio = comp_decon_ratio,
-    comp_ambig = comp_ambig,
-    comp_kit = comp_kit,
-    comp_user = comp_user,
-    comp_clin = comp_clin
-  )
-}
-
-compute_fp_logit <- function(prior_fp, fp_components, params, weights) {
-  qlogis(prior_fp) +
-    (params$fp_aggressiveness * (
-      weights$w_low_reads * center_fp_component(fp_components$comp_low_reads) +
-      weights$w_low_rpmm * center_fp_component(fp_components$comp_low_rpmm) +
-      weights$w_low_kmer * center_fp_component(fp_components$comp_low_kmer) +
-      weights$w_ref_bg * center_fp_component(fp_components$comp_ref_bg) +
-      weights$w_ref_prev * center_fp_component(fp_components$comp_ref_prev) +
-      weights$w_fc_ref * center_fp_component(fp_components$comp_fc_ref) +
-      weights$w_ctrl_enrich * center_fp_component(fp_components$comp_ctrl_enrich) +
-      weights$w_ctrl_prev * center_fp_component(fp_components$comp_ctrl_prev) +
-      weights$w_cohort_prev * center_fp_component(fp_components$comp_cohort_prev) +
-      weights$w_common_bg * center_fp_component(fp_components$comp_common_bg) +
-      weights$w_ubiq * center_fp_component(fp_components$comp_ubiq) +
-      weights$w_biomass * center_fp_component(fp_components$comp_biomass) +
-      weights$w_nonmicrobe_corr * center_fp_component(fp_components$comp_nonmicrobe_corr) +
-      weights$w_decon * center_fp_component(fp_components$comp_decon) +
-      weights$w_decon_ratio * center_fp_component(fp_components$comp_decon_ratio) +
-      weights$w_ambig * center_fp_component(fp_components$comp_ambig) +
-      weights$w_kitome * center_fp_component(fp_components$comp_kit) +
-      weights$w_user * center_fp_component(fp_components$comp_user) +
-      weights$w_clinical * center_fp_component(fp_components$comp_clin)
-    ))
-}
-
-add_fp_component_columns <- function(out, fp_components) {
-  out %>%
-    mutate(
-      fp_comp_low_reads = fp_components$comp_low_reads,
-      fp_comp_low_rpmm = fp_components$comp_low_rpmm,
-      fp_comp_low_kmer = fp_components$comp_low_kmer,
-      fp_comp_ref_bg = if_else(is.finite(ref_n) & ref_n >= 5 & is.finite(ref_med_rpmm), fp_components$comp_ref_bg, NA_real_),
-      fp_comp_ref_prev = if_else(is.finite(ref_prev), fp_components$comp_ref_prev, NA_real_),
-      fp_comp_fc_ref = if_else(is.finite(log2FC_vs_reference_median), fp_components$comp_fc_ref, NA_real_),
-      fp_comp_ctrl_enrich = if_else(is.finite(control_median_rpmm) & is.finite(log2FC_vs_control_median), fp_components$comp_ctrl_enrich, NA_real_),
-      fp_comp_ctrl_prev = if_else(is.finite(control_prevalence), fp_components$comp_ctrl_prev, NA_real_),
-      fp_comp_cohort_prev = fp_components$comp_cohort_prev,
-      fp_comp_common_bg = fp_components$comp_common_bg,
-      fp_comp_ubiq = fp_components$comp_ubiq,
-      fp_comp_biomass = fp_components$comp_biomass,
-      fp_comp_nonmicrobe_corr = fp_components$comp_nonmicrobe_corr,
-      fp_comp_decon = fp_components$comp_decon,
-      fp_comp_decon_ratio = if_else(is.finite(decon_ratio), fp_components$comp_decon_ratio, NA_real_),
-      fp_comp_ambig = fp_components$comp_ambig
+  
+  ok <- is.finite(x)
+  
+  out[ok] <- log1p(
+    pmax(
+      x[ok],
+      0
     )
+  )
+  
+  out
+}
+
+compute_final_score_features <- function(out) {
+  log_reads <- log1p_nonnegative_score(
+    out$reads_clade
+  )
+  
+  log_rpmm_score <- log1p_nonnegative_score(
+    out$rpmm
+  )
+  
+  log_uniq <- log1p_nonnegative_score(
+    out$uniq_kmers
+  )
+  
+  log_kpr <- log1p_nonnegative_score(
+    out$kmer_per_read
+  )
+  
+  log_decon <- log1p_nonnegative_score(
+    out$decon_rpmm
+  )
+  
+  log_ref_median <- log1p_nonnegative_score(
+    out$ref_med_rpmm
+  )
+  
+  ref_available <-
+    is.finite(out$log_rpmm) &
+    is.finite(out$ref_q50_log) &
+    is.finite(out$ref_q95_log) &
+    is.finite(out$ref_q99_log)
+  
+  reference_at_or_below_q99 <- ifelse(
+    ref_available,
+    as.numeric(
+      out$log_rpmm <=
+        out$ref_q99_log
+    ),
+    NA_real_
+  )
+  
+  reference_at_or_below_q95 <- ifelse(
+    ref_available,
+    as.numeric(
+      out$log_rpmm <=
+        out$ref_q95_log
+    ),
+    NA_real_
+  )
+  
+  reference_at_or_below_q50 <- ifelse(
+    ref_available,
+    as.numeric(
+      out$log_rpmm <=
+        out$ref_q50_log
+    ),
+    NA_real_
+  )
+  
+  reference_prevalence <- ifelse(
+    is.finite(out$ref_prev),
+    cap(
+      out$ref_prev,
+      0,
+      1
+    ),
+    NA_real_
+  )
+  
+  reference_relative_abundance <- ifelse(
+    is.finite(out$rpmm) &
+      is.finite(out$ref_med_rpmm),
+    log_ref_median -
+      log_rpmm_score,
+    NA_real_
+  )
+  
+  ambiguity_unresolved_fraction <- ifelse(
+    is.finite(
+      out$ambiguity_unresolved_fraction
+    ),
+    cap(
+      out$ambiguity_unresolved_fraction,
+      0,
+      1
+    ),
+    NA_real_
+  )
+  
+  ambiguity_species_nondominance <- ifelse(
+    is.finite(
+      out$ambiguity_species_nondominance
+    ),
+    cap(
+      out$ambiguity_species_nondominance,
+      0,
+      1
+    ),
+    NA_real_
+  )
+  
+  decontamination_ratio_raw <- ifelse(
+    is.finite(out$decon_ratio),
+    cap(
+      out$decon_ratio,
+      0,
+      1
+    ),
+    NA_real_
+  )
+  
+  biomass_scaled <- ifelse(
+    is.finite(out$biomass_scaled),
+    cap(
+      out$biomass_scaled,
+      0,
+      1
+    ),
+    NA_real_
+  )
+  
+  js_div <- ifelse(
+    is.finite(out$js_div),
+    cap(
+      out$js_div,
+      0,
+      1
+    ),
+    NA_real_
+  )
+  
+  in_clinical <-
+    !is.na(out$in_clinical_panel) &
+    out$in_clinical_panel
+  
+  in_kitome <-
+    !is.na(out$in_kitome) &
+    out$in_kitome
+  
+  clinical <- as.numeric(
+    in_clinical
+  )
+  
+  kitome_only <- as.numeric(
+    in_kitome &
+      !in_clinical
+  )
+  
+  kitome_clinical_overlap <- as.numeric(
+    in_kitome &
+      in_clinical
+  )
+  
+  low_enrichment <- ifelse(
+    is.finite(
+      reference_relative_abundance
+    ),
+    pmax(
+      reference_relative_abundance,
+      0
+    ),
+    NA_real_
+  )
+  
+  tibble(
+    reads_support =
+      -log_reads,
+    
+    rpmm_support =
+      -log_rpmm_score,
+    
+    uniq_kmer_support =
+      -log_uniq,
+    
+    kmer_per_read_support =
+      -log_kpr,
+    
+    ambiguity_unresolved_fraction =
+      ambiguity_unresolved_fraction,
+    
+    ambiguity_species_nondominance =
+      ambiguity_species_nondominance,
+    
+    reference_prevalence =
+      reference_prevalence,
+    
+    reference_median_abundance =
+      log_ref_median,
+    
+    reference_relative_abundance =
+      reference_relative_abundance,
+    
+    reference_at_or_below_q99 =
+      reference_at_or_below_q99,
+    
+    reference_at_or_below_q95 =
+      reference_at_or_below_q95,
+    
+    reference_at_or_below_q50 =
+      reference_at_or_below_q50,
+    
+    decontaminated_abundance =
+      -log_decon,
+    
+    decontamination_ratio =
+      -decontamination_ratio_raw,
+    
+    kitome_only =
+      kitome_only,
+    
+    kitome_clinical_overlap =
+      kitome_clinical_overlap,
+    
+    clinical_membership =
+      -clinical,
+    
+    low_biomass_context =
+      -biomass_scaled,
+    
+    reference_like_sample_composition =
+      -js_div,
+    
+    clinical_x_decon_support =
+      -clinical *
+      log_decon,
+    
+    kitome_only_x_decon_support =
+      -kitome_only *
+      log_decon,
+    
+    kitome_overlap_x_decon_support =
+      -kitome_clinical_overlap *
+      log_decon,
+    
+    reference_prevalence_x_low_enrichment =
+      reference_prevalence *
+      low_enrichment,
+    
+    unresolved_ambiguity_x_kmer_support =
+      -ambiguity_unresolved_fraction *
+      log_uniq,
+    
+    species_nondominance_x_kmer_support =
+      -ambiguity_species_nondominance *
+      log_uniq
+  )
+}
+
+compute_final_score <- function(out) {
+  model <- final_score_model()
+  
+  features <- compute_final_score_features(
+    out
+  )
+  
+  x <- as.matrix(
+    features[
+      ,
+      model$feature_names,
+      drop = FALSE
+    ]
+  )
+  
+  storage.mode(x) <- "double"
+  
+  for (
+    j in seq_along(
+      model$feature_names
+    )
+  ) {
+    bad <- !is.finite(
+      x[, j]
+    )
+    
+    if (any(bad)) {
+      x[bad, j] <-
+        model$impute_values[j]
+    }
+  }
+  
+  z <- sweep(
+    x,
+    2,
+    model$means,
+    FUN = "-"
+  )
+  
+  z <- sweep(
+    z,
+    2,
+    model$scales,
+    FUN = "/"
+  )
+  
+  contributions <- sweep(
+    z,
+    2,
+    model$standardized_weights,
+    FUN = "*"
+  )
+  
+  eta <-
+    model$intercept +
+    rowSums(
+      contributions
+    )
+  
+  mapped_logit <-
+    eta +
+    model$score_offset
+  
+  contam_prob <- plogis(
+    mapped_logit
+  )
+  
+  fp_score <-
+    100 *
+    contam_prob
+  
+  colnames(
+    contributions
+  ) <- paste0(
+    "score_contrib_",
+    model$feature_names
+  )
+  
+  list(
+    features = features,
+    
+    standardized_features = z,
+    
+    contributions = as.data.frame(
+      contributions,
+      stringsAsFactors = FALSE,
+      check.names = FALSE
+    ),
+    
+    eta = eta,
+    
+    mapped_logit = mapped_logit,
+    
+    contam_prob = contam_prob,
+    
+    fp_score = fp_score
+  )
 }
 
 taxa_table_columns <- function(tax_level = "S", show_fp_breakdown = FALSE) {
@@ -1408,25 +1898,27 @@ taxa_table_columns <- function(tax_level = "S", show_fp_breakdown = FALSE) {
   if (isTRUE(show_fp_breakdown)) {
     cols <- c(
       cols,
-      "fp_comp_low_reads",
-      "fp_comp_low_rpmm",
-      "fp_comp_low_kmer",
-      "fp_comp_ref_bg",
-      "fp_comp_ref_prev",
-      "fp_comp_fc_ref",
-      "fp_comp_ctrl_enrich",
-      "fp_comp_ctrl_prev",
-      "fp_comp_cohort_prev",
-      "fp_comp_common_bg",
-      "fp_comp_ubiq",
-      "fp_comp_biomass",
-      "fp_comp_nonmicrobe_corr",
-      "fp_comp_decon",
-      "fp_comp_decon_ratio",
-      "fp_comp_ambig"
+      "score_contrib_reads_support",
+      "score_contrib_rpmm_support",
+      "score_contrib_uniq_kmer_support",
+      "score_contrib_ambiguity_species_nondominance",
+      "score_contrib_reference_prevalence",
+      "score_contrib_reference_median_abundance",
+      "score_contrib_reference_relative_abundance",
+      "score_contrib_reference_at_or_below_q99",
+      "score_contrib_reference_at_or_below_q95",
+      "score_contrib_reference_at_or_below_q50",
+      "score_contrib_decontaminated_abundance",
+      "score_contrib_decontamination_ratio",
+      "score_contrib_kitome_clinical_overlap",
+      "score_contrib_clinical_membership",
+      "score_contrib_clinical_x_decon_support",
+      "score_contrib_kitome_only_x_decon_support",
+      "score_contrib_reference_prevalence_x_low_enrichment",
+      "score_contrib_unresolved_ambiguity_x_kmer_support"
     )
   }
-
+  
   cols
 }
 
@@ -1528,7 +2020,7 @@ apply_calls <- function(gs_long, tax_features, meta_df, params, sample_priors) {
   out <- gs_long %>%
     left_join(tf_keep, by = c("rank", "name_clean")) %>%
     left_join(group_sizes, by = "group") %>%
-    left_join(sample_priors %>% select(sample, prior_fp), by = "sample")
+    left_join(sample_priors %>% select(sample, biomass_scaled, js_div), by = "sample")
 
   out <- out %>%
     mutate(
@@ -1554,11 +2046,17 @@ apply_calls <- function(gs_long, tax_features, meta_df, params, sample_priors) {
     )
 
   amb <- compute_ambiguity_index(out)
-
+  
   out <- out %>%
-    left_join(amb, by = c("sample", "rank", "name_clean")) %>%
-    mutate(ambig_index = coalesce(ambig_index, 0))
-
+    left_join(
+      amb,
+      by = c(
+        "sample",
+        "rank",
+        "name_clean"
+      )
+    )
+  
   out <- out %>%
     mutate(
       bg_rpmm = coalesce0(bg_rpmm),
@@ -1568,21 +2066,37 @@ apply_calls <- function(gs_long, tax_features, meta_df, params, sample_priors) {
       log_decon_rpmm = safe_log(decon_rpmm, eps = params$eps)
     )
 
-  w <- fp_weights(params$analysis_mode)
-
-  prior_fp <- cap(coalesce(out$prior_fp, w$base_prior), 0.05, 0.95)
-  fp_components <- compute_fp_components(out, params)
-  fp_logit <- compute_fp_logit(prior_fp, fp_components, params, w)
-
-  out <- out %>%
-    mutate(
-      contam_prob = plogis(fp_logit),
-      fp_score = 100 * contam_prob,
-      fp_falsepos_flag = fp_score >= params$fp_falsepos_cutoff,
-      fp_true_flag = fp_score <= params$fp_true_cutoff
+  score_result <- compute_final_score(
+    out
+  )
+  
+  out <- bind_cols(
+    out,
+    as_tibble(
+      score_result$contributions
     )
-
-  out <- add_fp_component_columns(out, fp_components)
+  ) %>%
+    mutate(
+      final_model_logit =
+        score_result$eta,
+      
+      score_mapped_logit =
+        score_result$mapped_logit,
+      
+      contam_prob =
+        score_result$contam_prob,
+      
+      fp_score =
+        score_result$fp_score,
+      
+      fp_falsepos_flag =
+        fp_score >=
+        params$fp_falsepos_cutoff,
+      
+      fp_true_flag =
+        fp_score <=
+        params$fp_true_cutoff
+    )
 
   out <- out %>%
     mutate(
@@ -1595,12 +2109,18 @@ apply_calls <- function(gs_long, tax_features, meta_df, params, sample_priors) {
       call_reason = case_when(
         !is_microbial | is_host | is_plant ~ "Excluded as non-microbial or host",
         call == "Likely true" ~ paste0(
-          "Score ", round(fp_score, 1), " <= likely true cutoff ", round(params$fp_true_cutoff, 1),
-          "; high abundance above background outweighs cohort and reference background signals"
+          "Score ",
+          round(fp_score, 1),
+          " <= likely true cutoff ",
+          round(params$fp_true_cutoff, 1),
+          "; calibrated evidence supports a likely true microbial signal"
         ),
         call == "Likely false positive / background" ~ paste0(
-          "Score ", round(fp_score, 1), " >= false positive cutoff ", round(params$fp_falsepos_cutoff, 1),
-          "; cohort or reference background signals outweigh abundance above background"
+          "Score ",
+          round(fp_score, 1),
+          " >= false positive cutoff ",
+          round(params$fp_falsepos_cutoff, 1),
+          "; calibrated evidence supports background or contamination"
         ),
         TRUE ~ paste0(
           "Score ", round(fp_score, 1), " is between ", round(params$fp_true_cutoff, 1), " and ", round(params$fp_falsepos_cutoff, 1),
@@ -2162,63 +2682,109 @@ analysis_settings_ui <- function(include_analyze_button = TRUE, include_file_inp
       sliderInput("collapse_top_frac", "Dominance fraction to keep top species", min = 0.5, max = 1.0, value = ui_default(defaults, "collapse_top_frac", 0.85), step = 0.05),
       
       tags$hr(),
-      h4("Celltaminate score"),
-      sliderInput("fp_falsepos_cutoff", "Likely false positive/background cutoff (≥)", min = 0, max = 100, value = ui_default(defaults, "fp_falsepos_cutoff", 75), step = 1),
-      sliderInput("fp_true_cutoff", "Likely true cutoff (≤)", min = 0, max = 100, value = ui_default(defaults, "fp_true_cutoff", 1), step = 1),
-      sliderInput("fp_aggressiveness", "Overall score aggressiveness", min = 0.25, max = 3, value = ui_default(defaults, "fp_aggressiveness", 1.15), step = 0.05),
+      tags$hr(),
+      
+      h4(
+        "Celltaminate score"
+      ),
+      
+      sliderInput(
+        "fp_falsepos_cutoff",
+        "Likely false positive/background cutoff (≥)",
+        min = 0,
+        max = 100,
+        value = ui_default(
+          defaults,
+          "fp_falsepos_cutoff",
+          75
+        ),
+        step = 1
+      ),
+      
+      sliderInput(
+        "fp_true_cutoff",
+        "Likely true cutoff (≤)",
+        min = 0,
+        max = 100,
+        value = ui_default(
+          defaults,
+          "fp_true_cutoff",
+          1
+        ),
+        step = 1
+      ),
       
       tags$details(
-        tags$summary(tags$strong("Advanced score tuning")),
-        sliderInput("fp_mid_reads", "Reads midpoint", min = 1, max = 500, value = ui_default(defaults, "fp_mid_reads", 12), step = 1),
-        sliderInput("fp_mid_rpmm", "RPMM midpoint", min = 0.01, max = 1000, value = ui_default(defaults, "fp_mid_rpmm", 8), step = 0.5),
-        sliderInput("fp_mid_decon_rpmm", "Decontaminated RPMM midpoint", min = 0.01, max = 1000, value = ui_default(defaults, "fp_mid_decon_rpmm", 4), step = 0.5),
-        sliderInput("fp_mid_uniq_kmers", "Unique k-mers midpoint", min = 0, max = 5000, value = ui_default(defaults, "fp_mid_uniq_kmers", 96), step = 1),
-        sliderInput("fp_mid_kmer_per_read", "Unique k-mers/read midpoint", min = 0.01, max = 5, value = ui_default(defaults, "fp_mid_kmer_per_read", 0.4), step = 0.05),
-        tags$hr(),
-        h5("Score modality weights"),
-        sliderInput("w_low_reads_user", "Low-read evidence", min = 0, max = 3, value = ui_default(defaults, "w_low_reads_user", 1.4), step = 0.1),
-        sliderInput("w_low_rpmm_user", "Low-abundance evidence", min = 0, max = 3, value = ui_default(defaults, "w_low_rpmm_user", 1.3), step = 0.1),
-        sliderInput("w_low_kmer_user", "Low-k-mer evidence", min = 0, max = 3, value = ui_default(defaults, "w_low_kmer_user", 1.2), step = 0.1),
-        sliderInput("w_ref_bg_user", "Reference-background evidence", min = 0, max = 3, value = ui_default(defaults, "w_ref_bg_user", 1.8), step = 0.1),
-        sliderInput("w_ubiq_user", "Cohort ubiquity evidence", min = 0, max = 3, value = ui_default(defaults, "w_ubiq_user", 0.9), step = 0.1),
-        sliderInput("w_biomass_user", "Biomass and host-correlation evidence", min = 0, max = 3, value = ui_default(defaults, "w_biomass_user", 0.9), step = 0.1),
-        sliderInput("w_decon_user", "Decontaminated-abundance evidence", min = 0, max = 3, value = ui_default(defaults, "w_decon_user", 1.3), step = 0.1),
-        sliderInput("w_ambig_user", "Ambiguity penalty", min = 0, max = 3, value = ui_default(defaults, "w_ambig_user", 0.8), step = 0.1),
-        sliderInput("w_user_user", "Suspected-contaminant prior", min = 0, max = 3, value = ui_default(defaults, "w_user_user", 0.7), step = 0.1),
-        sliderInput("w_clinical_user", "Clinical-priority prior", min = 0, max = 3, value = ui_default(defaults, "w_clinical_user", 0.8), step = 0.1),
-        tags$hr(),
-        h5("Prevalence and ubiquity inputs"),
-        sliderInput("min_reads_prevalence", "Min reads for prevalence", min = 0, max = 500, value = ui_default(defaults, "min_reads_prevalence", 5), step = 1),
-        sliderInput("min_rpmm_prevalence", "Min RPMM for prevalence", min = 0, max = 100, value = ui_default(defaults, "min_rpmm_prevalence", 0.2), step = 0.1),
-        sliderInput("min_uniq_kmers_prevalence", "Min unique k-mers for prevalence", min = 0, max = 5000, value = ui_default(defaults, "min_uniq_kmers_prevalence", 96), step = 1),
-        sliderInput("min_kmer_per_read_prevalence", "Min unique k-mers/read for prevalence", min = 0, max = 50, value = ui_default(defaults, "min_kmer_per_read_prevalence", 0.4), step = 0.1)
+        tags$summary(
+          tags$strong(
+            "Advanced prevalence inputs"
+          )
+        ),
+        
+        h5(
+          "Prevalence and ubiquity inputs"
+        ),
+        
+        sliderInput(
+          "min_reads_prevalence",
+          "Min reads for prevalence",
+          min = 0,
+          max = 500,
+          value = ui_default(
+            defaults,
+            "min_reads_prevalence",
+            5
+          ),
+          step = 1
+        ),
+        
+        sliderInput(
+          "min_rpmm_prevalence",
+          "Min RPMM for prevalence",
+          min = 0,
+          max = 100,
+          value = ui_default(
+            defaults,
+            "min_rpmm_prevalence",
+            0.2
+          ),
+          step = 0.1
+        ),
+        
+        sliderInput(
+          "min_uniq_kmers_prevalence",
+          "Min unique k-mers for prevalence",
+          min = 0,
+          max = 5000,
+          value = ui_default(
+            defaults,
+            "min_uniq_kmers_prevalence",
+            96
+          ),
+          step = 1
+        ),
+        
+        sliderInput(
+          "min_kmer_per_read_prevalence",
+          "Min unique k-mers/read for prevalence",
+          min = 0,
+          max = 50,
+          value = ui_default(
+            defaults,
+            "min_kmer_per_read_prevalence",
+            0.4
+          ),
+          step = 0.1
+        )
       ),
-      checkboxInput("show_fp_breakdown", "Show score breakdown columns in taxa tables", value = ui_default(defaults, "show_fp_breakdown", FALSE)),
-      
-      tags$hr(),
-      h4("Optional organism lists"),
-      fileInput(
-        "organism_file",
-        "Upload a suspected contaminant list (.txt) [optional]",
-        accept = c(".txt")
-      ),
-      selectizeInput(
-        "organisms",
-        label = "Or add suspected contaminants (optional)",
-        choices = NULL,
-        selected = NULL,
-        multiple = TRUE,
-        options = list(maxOptions = 15000, placeholder = "Type to search...")
-      ),
-      actionButton("select_all_organisms", "Select All", icon = icon("check")),
-      tags$small(class = "text-muted", "Tip: type-to-search is usually faster than selecting everything."),
-      
-      tags$hr(),
-      h4("Optional clinical panel (prioritize likely pathogens)"),
-      fileInput(
-        "clinical_panel_file",
-        "Upload a clinical panel list (.txt) [optional]",
-        accept = c(".txt")
+      checkboxInput(
+        "show_fp_breakdown",
+        "Show score breakdown columns in taxa tables",
+        value = ui_default(
+          defaults,
+          "show_fp_breakdown",
+          FALSE
+        )
       )
     )
   )
@@ -2302,9 +2868,20 @@ server <- function(input, output, session) {
     first_existing_path(c(
       fname,
       file.path("www", fname),
-      unlist(lapply(app_dir_candidates, function(d) c(file.path(d, fname), file.path(d, "www", fname))), use.names = FALSE),
+      file.path("data", "panels", fname),
+      file.path("data", "reference", fname),
+      unlist(lapply(app_dir_candidates, function(d) c(
+        file.path(d, fname),
+        file.path(d, "www", fname),
+        file.path(d, "data", "panels", fname),
+        file.path(d, "data", "reference", fname),
+        file.path(d, "..", "data", "panels", fname),
+        file.path(d, "..", "data", "reference", fname)
+      )), use.names = FALSE),
       file.path(app_dir, fname),
-      file.path(app_dir, "www", fname)
+      file.path(app_dir, "www", fname),
+      file.path(app_dir, "..", "data", "panels", fname),
+      file.path(app_dir, "..", "data", "reference", fname)
     ))
   }
 
@@ -2342,16 +2919,77 @@ server <- function(input, output, session) {
   capture_ui_defaults <- function() {
     list(
       tax_level = input$tax_level %||% "S",
-      host_species = input$host_species %||% c("human"),
-      host_taxids_manual = input$host_taxids_manual %||% "",
-      include_protozoa = isTRUE(input$include_protozoa),
-      collapse_species = isTRUE(input$collapse_species),
-      collapse_min_genus_reads = as.numeric(input$collapse_min_genus_reads %||% 30),
-      collapse_top_frac = as.numeric(input$collapse_top_frac %||% 0.85),
-      fp_falsepos_cutoff = as.numeric(input$fp_falsepos_cutoff %||% 75),
-      fp_true_cutoff = as.numeric(input$fp_true_cutoff %||% 5),
-      fp_aggressiveness = as.numeric(input$fp_aggressiveness %||% 1.15),
-      show_fp_breakdown = isTRUE(input$show_fp_breakdown)
+      
+      host_species =
+        input$host_species %||%
+        c("human"),
+      
+      host_taxids_manual =
+        input$host_taxids_manual %||%
+        "",
+      
+      include_protozoa =
+        isTRUE(
+          input$include_protozoa
+        ),
+      
+      collapse_species =
+        isTRUE(
+          input$collapse_species
+        ),
+      
+      collapse_min_genus_reads =
+        as.numeric(
+          input$collapse_min_genus_reads %||%
+            30
+        ),
+      
+      collapse_top_frac =
+        as.numeric(
+          input$collapse_top_frac %||%
+            0.85
+        ),
+      
+      fp_falsepos_cutoff =
+        as.numeric(
+          input$fp_falsepos_cutoff %||%
+            75
+        ),
+      
+      fp_true_cutoff =
+        as.numeric(
+          input$fp_true_cutoff %||%
+            1
+        ),
+      
+      min_reads_prevalence =
+        as.numeric(
+          input$min_reads_prevalence %||%
+            5
+        ),
+      
+      min_rpmm_prevalence =
+        as.numeric(
+          input$min_rpmm_prevalence %||%
+            0.2
+        ),
+      
+      min_uniq_kmers_prevalence =
+        as.numeric(
+          input$min_uniq_kmers_prevalence %||%
+            96
+        ),
+      
+      min_kmer_per_read_prevalence =
+        as.numeric(
+          input$min_kmer_per_read_prevalence %||%
+            0.4
+        ),
+      
+      show_fp_breakdown =
+        isTRUE(
+          input$show_fp_breakdown
+        )
     )
   }
 
@@ -2366,7 +3004,7 @@ server <- function(input, output, session) {
     get_clinically_important_pathogen_names(CLINICALLY_IMPORTANT_PATHOGENS)
   })
 
-  has_user_contam_display <- reactive({
+  has_kitome_display <- reactive({
     length(default_organisms() %||% character(0)) > 0
   })
 
@@ -2416,23 +3054,49 @@ server <- function(input, output, session) {
   params <- reactive({
     list(
       analysis_mode = "Cell-line",
-      tax_level = input$tax_level %||% "S",
+      
+      tax_level =
+        input$tax_level %||%
+        "S",
+      
       eps = 1e-9,
-
-      min_reads_prevalence = 5,
-      min_rpmm_prevalence = 0.2,
-      min_uniq_kmers_prevalence = 96,
-      min_kmer_per_read_prevalence = 0.4,
-
-      fp_falsepos_cutoff = as.numeric(input$fp_falsepos_cutoff %||% 75),
-      fp_true_cutoff = as.numeric(input$fp_true_cutoff %||% 5),
-      fp_aggressiveness = as.numeric(input$fp_aggressiveness %||% 1.15),
-      fp_mid_reads = 12,
-      fp_mid_rpmm = 8,
-      fp_mid_decon_rpmm = 4,
-      fp_mid_uniq_kmers = 96,
-      fp_mid_kmer_per_read = 0.4,
-
+      
+      min_reads_prevalence =
+        as.numeric(
+          input$min_reads_prevalence %||%
+            5
+        ),
+      
+      min_rpmm_prevalence =
+        as.numeric(
+          input$min_rpmm_prevalence %||%
+            0.2
+        ),
+      
+      min_uniq_kmers_prevalence =
+        as.numeric(
+          input$min_uniq_kmers_prevalence %||%
+            96
+        ),
+      
+      min_kmer_per_read_prevalence =
+        as.numeric(
+          input$min_kmer_per_read_prevalence %||%
+            0.4
+        ),
+      
+      fp_falsepos_cutoff =
+        as.numeric(
+          input$fp_falsepos_cutoff %||%
+            75
+        ),
+      
+      fp_true_cutoff =
+        as.numeric(
+          input$fp_true_cutoff %||%
+            1
+        ),
+      
       fc_pseudocount = 0.1
     )
   })
@@ -2849,33 +3513,27 @@ server <- function(input, output, session) {
               ),
               
               div(
-                class = "intro-card",
-                style = "background:#ffffff; border:1px solid #e5e7eb; border-radius:14px; padding:18px; box-shadow:0 2px 10px rgba(0,0,0,0.05);",
-                h4(style = "margin-top:0; margin-bottom:10px;", "Demo example of how Celltaminate works"),
-                div(
-                  style = "background:#f8fafc; border:1px solid #dbeafe; border-left:5px solid #2563eb; border-radius:12px; padding:14px 16px; margin-top:10px; margin-bottom:14px;",
-                  HTML(
-                    "<b>Conceptual equation</b><br/>",
-                    "Celltaminate score = 100 × plogis(logit(starting false positive score) + weighted evidence)"
-                  )
-                ),
-                tags$p(
-                  HTML(
-                    "Celltaminate starts from an initial <b>false positive score</b> of 0.8 for each organism. ",
-                    "This initial value is converted into log-odds by the <b>logit</b> function. ",
-                    "Then each evidence component is added as a weighted term before converting back with <b>plogis</b> to a final score between 0 and 100."
-                  )
-                ),
-                tags$p(
-                  HTML(
-                    "Each evidence component is designed to stay around <b>0.5</b> when it is neutral or uninformative. ",
-                    "After centering by the rule <b>2 × (component − 0.5)</b> a value near 0.5 contributes almost nothing. ",
-                    "A value below 0.5 pushes the score downward. ",
-                    "A value above 0.5 pushes the score upward. ",
-                    "The weights determine how strongly each evidence type changes the starting false positive score of 0.8."
-                  )
+                style = "background:#f8fafc; border:1px solid #dbeafe; border-left:5px solid #2563eb; border-radius:12px; padding:14px 16px; margin-top:10px; margin-bottom:14px;",
+                
+                HTML(
+                  "<b>Conceptual equation</b><br/>",
+                  "Celltaminate score = 100 × plogis(fitted intercept + standardized weighted evidence + score-mapping offset)"
                 )
               ),
+              
+              tags$p(
+                HTML(
+                  "Celltaminate evaluates quantitative and biological evidence for each organism using a calibrated model. ",
+                  "Each fitted feature is transformed and standardized using parameters learned from the development benchmark, multiplied by its fitted coefficient, and combined with the fitted intercept."
+                )
+              ),
+              
+              tags$p(
+                HTML(
+                  "The resulting value is mapped to the 0–100 Celltaminate score. ",
+                  "Lower scores indicate stronger support for a likely true organism, while higher scores indicate stronger background or contamination evidence."
+                )
+                ),
               
               fluidRow(
                 column(
@@ -2889,25 +3547,37 @@ server <- function(input, output, session) {
                       "More likely to be true organism because"
                     ),
                     tags$ul(
-                      tags$li("sample-level microbial biomass is higher"),
-                      tags$li("sample composition is less similar to the reference background profile"),
-                      tags$li("read count is higher"),
-                      tags$li("RPMM or abundance is higher"),
-                      tags$li("k-mer support is stronger"),
-                      tags$li("reference background signal is lower"),
-                      tags$li("reference prevalence is lower"),
-                      tags$li("fold change above the reference median read count is higher"),
-                      tags$li("fold change above the control median read count is higher when controls are available"),
-                      tags$li("control prevalence is lower when controls are available"),
-                      tags$li("cohort prevalence is lower"),
-                      tags$li("common background pattern across cohort and reference is lower"),
-                      tags$li("ubiquity across samples is lower"),
-                      tags$li("correlation with microbial biomass is more positive"),
-                      tags$li("correlation with nonmicrobe fraction is lower"),
-                      tags$li("more signal remains after subtracting background"),
-                      tags$li("remaining-signal fraction after subtracting background is higher"),
-                      tags$li("taxonomic ambiguity is lower"),
-                      tags$li("the organism is present in the clinically important pathogens list")
+                      tags$li(
+                        "read support is stronger"
+                      ),
+                      
+                      tags$li(
+                        "RPMM or abundance is higher"
+                      ),
+                      
+                      tags$li(
+                        "unique k-mer support is stronger"
+                      ),
+                      
+                      tags$li(
+                        "species-level taxonomic support is less ambiguous"
+                      ),
+                      
+                      tags$li(
+                        "the organism is less consistent with abundance patterns in the sterile reference dataset"
+                      ),
+                      
+                      tags$li(
+                        "more microbial abundance remains after background subtraction"
+                      ),
+                      
+                      tags$li(
+                        "the decontaminated fraction is higher"
+                      ),
+                      
+                      tags$li(
+                        "the organism is represented in the clinically important pathogen panel when supported by quantitative sequence evidence"
+                      )
                     ),
                     tags$p("These findings support the idea that this organism is behaving like a meaningful biological signal rather than a common background organism."),
                     div(
@@ -2927,26 +3597,37 @@ server <- function(input, output, session) {
                       "More likely to be background organism because"
                     ),
                     tags$ul(
-                      tags$li("sample-level microbial biomass is lower"),
-                      tags$li("sample composition is more similar to the reference background profile"),
-                      tags$li("read count is lower"),
-                      tags$li("RPMM or abundance is lower"),
-                      tags$li("k-mer support is weaker"),
-                      tags$li("reference background signal is higher"),
-                      tags$li("reference prevalence is higher"),
-                      tags$li("fold change above the reference median read count is lower"),
-                      tags$li("fold change above the control median read count is lower when controls are available"),
-                      tags$li("control prevalence is higher when controls are available"),
-                      tags$li("cohort prevalence is higher"),
-                      tags$li("common background pattern across cohort and reference is stronger"),
-                      tags$li("ubiquity across samples is higher"),
-                      tags$li("correlation with microbial biomass is more negative"),
-                      tags$li("correlation with nonmicrobe fraction is higher"),
-                      tags$li("less signal remains after subtracting background"),
-                      tags$li("remaining-signal fraction after subtracting background is lower"),
-                      tags$li("taxonomic ambiguity is higher"),
-                      tags$li("the organism is present in the kitome and background blacklist"),
-                      tags$li("the organism is present in the user contaminant list if such a list is provided")
+                      tags$li(
+                        "read support is weaker"
+                      ),
+                      
+                      tags$li(
+                        "RPMM or abundance is lower"
+                      ),
+                      
+                      tags$li(
+                        "unique k-mer support is weaker"
+                      ),
+                      
+                      tags$li(
+                        "species-level taxonomic support is more ambiguous"
+                      ),
+                      
+                      tags$li(
+                        "the observed abundance is more consistent with the sterile reference background"
+                      ),
+                      
+                      tags$li(
+                        "less microbial abundance remains after background subtraction"
+                      ),
+                      
+                      tags$li(
+                        "the decontaminated fraction is lower"
+                      ),
+                      
+                      tags$li(
+                        "kitome membership can contribute together with weak decontaminated support"
+                      )
                     ),
                     tags$p("These findings support the idea that this organism is behaving more like background contamination than a true biological signal."),
                     div(
@@ -4061,7 +4742,7 @@ server <- function(input, output, session) {
             gs = gs,
             tax_level = tax_level,
             show_fp_breakdown = isTRUE(input$show_fp_breakdown),
-            show_kitome = isTRUE(has_user_contam_display()),
+            show_kitome = isTRUE(has_kitome_display()),
             show_clinical_panel = isTRUE(has_clinical_panel_display())
           )
 
