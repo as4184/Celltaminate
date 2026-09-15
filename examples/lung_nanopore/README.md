@@ -1,18 +1,11 @@
 # Lung Nanopore example
 
-This folder contains a small example Kraken/KrakenUniq-style report and metadata table.
+This directory contains one Kraken-style report and matching metadata for a minimal Celltaminate run.
 
-Files:
-
-```text
-S6.kraken.report.txt
-input_list.txt
-metadata.tsv
-run_example.sh
-```
-
-Run from the repository root:
+From the repository root:
 
 ```bash
 bash examples/lung_nanopore/run_example.sh
 ```
+
+The script downloads the reference background table if it is not already present and writes results to `examples/lung_nanopore/celltaminate_example_output/`.
