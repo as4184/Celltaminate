@@ -4,7 +4,7 @@ on:
   push:
     branches: [ cleanup-current-model ]
     paths:
-      - '.upload_cli/READY2'
+      - '.upload_cli/READY3'
 
 permissions:
   contents: write
@@ -22,9 +22,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat .upload_cli/part00 .upload_cli/part01 .upload_cli/part02 .upload_cli/part03 \
-            | base64 -d | gzip -d > scripts/Celltaminate.R
-          test "$(git hash-object scripts/Celltaminate.R)" = "90c837776a9b6599d848f3a5e637fd2b2829d774"
+          wc -c .upload_cli/part00 .upload_cli/part01 .upload_cli/part02 .upload_cli/part03
+          sha256sum .upload_cli/part00 .upload_cli/part01 .upload_cli/part02 .upload_cli/part03
+          cat .upload_cli/part00 .upload_cli/part01 .upload_cli/part02 .upload_cli/part03 > /tmp/celltaminate.b64
+          wc -c /tmp/celltaminate.b64
+          base64 -d /tmp/celltaminate.b64 > /tmp/celltaminate.gz
+          sha256sum /tmp/celltaminate.gz
+          gzip -t /tmp/celltaminate.gz
+          gzip -dc /tmp/celltaminate.gz > scripts/Celltaminate.R
+          wc -c scripts/Celltaminate.R
+          ACTUAL_HASH="$(git hash-object scripts/Celltaminate.R)"
+          echo "Celltaminate.R Git blob: ${ACTUAL_HASH}"
+          test "${ACTUAL_HASH}" = "90c837776a9b6599d848f3a5e637fd2b2829d774"
           rm -rf .upload_cli
           rm -rf .update_payload
           rm -f .github/workflows/materialize-cli.yml
