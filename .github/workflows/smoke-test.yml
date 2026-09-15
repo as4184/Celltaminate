@@ -3,29 +3,24 @@ name: smoke-test
 on:
   pull_request:
   push:
-    branches: [ main, master ]
-
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    branches: [ main ]
 
 jobs:
   wrapper-dry-run:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Check wrapper help
+      - name: Check command-line launcher
         run: |
-          python3 -m py_compile bin/celltaminate scripts/celltaminate_full_workflow.py scripts/download_reference_from_zenodo.py
+          python3 -m py_compile bin/celltaminate
           python3 bin/celltaminate --help
           python3 bin/celltaminate run --help
-          python3 bin/celltaminate from-fastq --help
-          python3 scripts/celltaminate_full_workflow.py --help
-      - name: Dry-run report workflow
+          python3 bin/celltaminate app --help
+          python3 bin/celltaminate download-reference --help
+      - name: Dry-run bundled example
         run: |
-          python3 bin/celltaminate run             --input-list examples/lung_nanopore/input_list.txt             --metadata examples/lung_nanopore/metadata.tsv             --outdir /tmp/celltaminate_dry_run             --dry-run
-      - name: Dry-run FASTQ workflow
-        run: |
-          mkdir -p /tmp/celltaminate_ci/fastq /tmp/celltaminate_ci/kraken_db
-          printf '@read1\nACGTACGTACGT\n+\nFFFFFFFFFFFF\n' > /tmp/celltaminate_ci/fastq/Sample1.fastq
-          printf 'sample	r1	group	sample_type	is_control\nSample1	/tmp/celltaminate_ci/fastq/Sample1.fastq	Case	Nanopore	FALSE\n' > /tmp/celltaminate_ci/samples.tsv
-          python3 bin/celltaminate from-fastq             --samplesheet /tmp/celltaminate_ci/samples.tsv             --kraken2-db /tmp/celltaminate_ci/kraken_db             --outdir /tmp/celltaminate_fastq_dry_run             --dry-run
+          python3 bin/celltaminate run \
+            --input-list examples/lung_nanopore/input_list.txt \
+            --metadata examples/lung_nanopore/metadata.tsv \
+            --outdir /tmp/celltaminate_dry_run \
+            --dry-run
