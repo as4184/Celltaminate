@@ -1,6 +1,6 @@
 # Output files
 
-A Celltaminate run writes tables, plots, cleaned reports, and a run summary.
+A Celltaminate run writes tables, plots, optional cleaned reports, and a run summary.
 
 ```text
 output_dir/
@@ -15,9 +15,9 @@ output_dir/
 └── run_summary.tsv
 ```
 
-## Main result table
+## Main result tables
 
-The most useful tables are usually in:
+The main taxon-level outputs are in:
 
 ```text
 output_dir/tables/per_sample/
@@ -31,9 +31,9 @@ Important columns include:
 - `RPMM`: reads per million microbial reads;
 - `Decontaminated_RPMM`: background-subtracted microbial abundance;
 - `Celltaminate_Score`: 0-100 contamination-aware score;
-- `Call`: likely true, uncertain, or likely false positive/background;
-- `Call_reason`: short explanation of the call.
+- `Call`: three-tier software call;
+- `Call_reason`: concise explanation of the call.
 
 ## Cleaned reports
 
-By default, Celltaminate writes cleaned Kraken-style reports after removing taxa called as likely false positive/background or uncertain. The cleaned reports are useful for downstream exploratory analysis, but they should not replace the original taxonomic reports.
+Celltaminate can write cleaned Kraken-style reports after removing user-selected call categories. The original taxonomic report is not modified.
