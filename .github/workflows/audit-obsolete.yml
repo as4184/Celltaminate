@@ -1,0 +1,26 @@
+name: audit-obsolete
+
+on:
+  push:
+    branches: [ cleanup-current-model ]
+    paths:
+      - '.audit_obsolete_trigger'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: cleanup-current-model
+      - name: Scan obsolete terminology and options
+        shell: bash
+        run: |
+          set +e
+          echo '=== Obsolete terminology and options ==='
+          grep -RniE --exclude-dir=.git --exclude='*.tsv' \
+            'Likely true|Likely false|Uncertain|three-tier|fp_falsepos_cutoff|fp-falsepos-cutoff|is_control|control_prevalence|control_median|mean_rpmm_control|median_rpmm_control|quick_remove|quick-remove|matched control|user[- ]supplied control|control sample|control samples' .
+          echo '=== End audit ==='
