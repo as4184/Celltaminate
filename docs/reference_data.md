@@ -1,6 +1,6 @@
 # Reference data
 
-Celltaminate uses a processed reference background derived from sterile human cell-line sequencing experiments. The source resource contains 2,491 sterile experiments, and the processed reference table used by the current implementation contains 1,040 unique sample identifiers.
+Celltaminate uses a processed reference background derived from sterile human cell-line sequencing experiments. The reference table contains 1,040 unique sample identifiers.
 
 The expected columns are:
 
