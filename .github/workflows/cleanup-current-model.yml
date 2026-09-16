@@ -1,0 +1,345 @@
+name: cleanup-current-model
+
+on:
+  push:
+    branches: [ cleanup-current-model ]
+    paths:
+      - '.cleanup_current_trigger'
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: cleanup-current-model
+          fetch-depth: 0
+
+      - name: Update R sources to current binary workflow
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          def sub1(t, pat, repl, flags=0, label=''):
+              nt, n = re.subn(pat, repl, t, flags=flags)
+              if n != 1:
+                  raise SystemExit(f'{label or pat}: expected 1 replacement, got {n}')
+              return nt
+
+          def clean_r(path, is_app=False):
+              t = path.read_text()
+
+              t = t.replace('sample, group, sample_type, is_control', 'sample, group, sample_type')
+              t = re.sub(r'^#\s+--fp_falsepos_cutoff.*\n', '', t, flags=re.M)
+              t = re.sub(r'^#\s+--quick_remove.*\n', '', t, flags=re.M)
+
+              t = sub1(
+                  t,
+                  r'call_bucket_label <- function\(call\) \{.*?\n\}\n\nCALL_BUCKET_LEVELS <- c\(.*?\n\)\n\nCALL_PALETTE <- c\(.*?\n\)\n',
+                  '''call_bucket_label <- function(call) {\n  dplyr::case_when(\n    call == "Prioritized" ~ "Prioritized",\n    TRUE ~ "Not prioritized"\n  )\n}\n\nCALL_BUCKET_LEVELS <- c(\n  "Prioritized",\n  "Not prioritized"\n)\n\nCALL_PALETTE <- c(\n  "Prioritized" = "#2E7D32",\n  "Not prioritized" = "#8B0000"\n)\n''',
+                  re.S,
+                  'call helpers'
+              )
+              t = t.replace('call_bucket = dplyr::coalesce(call_bucket, "Uncertain")', 'call_bucket = dplyr::coalesce(call_bucket, "Not prioritized")')
+
+              t = t.replace('true_taxa = character(0)', 'prioritized_taxa = character(0)')
+              t = sub1(
+                  t,
+                  r'call_priority = dplyr::case_when\(\n\s*call == "Likely true" ~ 1,\n\s*call == "Uncertain" ~ 2,\n\s*call == "Likely false positive / background" ~ 3,\n\s*TRUE ~ 4\n\s*\)',
+                  'call_priority = dplyr::case_when(\n        call == "Prioritized" ~ 1,\n        TRUE ~ 2\n      )',
+                  label='BioAI priority'
+              )
+              t = t.replace('true_taxa <- base %>%\n    filter(call == "Likely true")', 'prioritized_taxa <- base %>%\n    filter(call == "Prioritized")')
+              t = t.replace('if (length(true_taxa) > 0) true_taxa else', 'if (length(prioritized_taxa) > 0) prioritized_taxa else')
+              t = t.replace('true_taxa = as.character(true_taxa)', 'prioritized_taxa = as.character(prioritized_taxa)')
+
+              t = sub1(
+                  t,
+                  r'\n  control_samples <- character\(0\).*?\n  use_cohort_prevalence <-',
+                  '\n  use_cohort_prevalence <-',
+                  re.S,
+                  'control sample setup'
+              )
+              t = sub1(
+                  t,
+                  r'\n  if \(n_controls > 0\) \{.*?\n  \}\n\n  tax_cor <-',
+                  '\n\n  tax_cor <-',
+                  re.S,
+                  'control tax block'
+              )
+              t = re.sub(r'^\s*use_control_prevalence <- .*\n', '', t, flags=re.M)
+              t = t.replace(
+                  'mutate(bg_rpmm = pmax(coalesce0(median_rpmm_control_detected), coalesce0(ref_med_rpmm), coalesce0(cohort_bg_rpmm)))',
+                  'mutate(bg_rpmm = pmax(coalesce0(ref_med_rpmm), coalesce0(cohort_bg_rpmm)))'
+              )
+
+              for pat in [
+                  r'^\s*control_prevalence,\n',
+                  r'^\s*median_rpmm_control_detected,\n',
+                  r'^\s*median_rpmm_control_detected = suppressWarnings\(as.numeric\(median_rpmm_control_detected\)\),\n',
+                  r'^\s*control_median_rpmm = .*\n',
+                  r'^\s*log2FC_vs_control_median = .*\n',
+                  r'^\s*enriched_vs_controls = .*\n'
+              ]:
+                  t = re.sub(pat, '', t, flags=re.M)
+
+              t = sub1(
+                  t,
+                  r'\n      fp_falsepos_flag =\n        fp_score >=\n        params\$fp_falsepos_cutoff,\n\s*\n      fp_true_flag =',
+                  '\n      fp_true_flag =',
+                  label='upper score flag'
+              )
+              t = sub1(
+                  t,
+                  r'call = case_when\(\n\s*!is_microbial \| is_host \| is_plant ~ "Non-microbial / Host",\n\s*fp_true_flag ~ "Likely true",\n\s*fp_falsepos_flag ~ "Likely false positive / background",\n\s*TRUE ~ "Uncertain"\n\s*\),\n\s*call_reason = case_when\(.*?\n\s*\)\n\s*\)',
+                  '''call = case_when(\n        !is_microbial | is_host | is_plant ~ "Non-microbial / Host",\n        fp_true_flag ~ "Prioritized",\n        TRUE ~ "Not prioritized"\n      ),\n      call_reason = case_when(\n        !is_microbial | is_host | is_plant ~ "Excluded as non-microbial or host",\n        call == "Prioritized" ~ paste0(\n          "Score ", round(fp_score, 1),\n          " <= prioritization cutoff ", round(params$fp_true_cutoff, 1)\n        ),\n        TRUE ~ paste0(\n          "Score ", round(fp_score, 1),\n          " > prioritization cutoff ", round(params$fp_true_cutoff, 1)\n        )\n      )\n    )''',
+                  re.S,
+                  'binary call assignment'
+              )
+
+              t = re.sub(r'^\s*"  --fp_falsepos_cutoff NUMERIC",\n', '', t, flags=re.M)
+              t = re.sub(r'\n\s*fp_falsepos_cutoff = as.numeric\(\n\s*args\$fp_falsepos_cutoff %\|\|% 75\n\s*\),', '', t)
+
+              if is_app:
+                  t = sub1(
+                      t,
+                      r'\n\s*sliderInput\(\n\s*"fp_falsepos_cutoff",\n\s*"Likely false positive/background cutoff \(≥\)",.*?\n\s*\),\n\s*\n\s*sliderInput\(\n\s*"fp_true_cutoff",',
+                      '\n      sliderInput(\n        "fp_true_cutoff",',
+                      re.S,
+                      'upper cutoff slider'
+                  )
+                  t = t.replace('"Likely true cutoff (≤)"', '"Prioritization cutoff (≤)"')
+                  t = re.sub(r'\n\s*fp_falsepos_cutoff\s*=.*?(?=\n\s*fp_true_cutoff\s*=)', '', t, flags=re.S)
+
+              t = sub1(
+                  t,
+                  r'compute_remove_taxa_for_sample <- function\(gs, quick, protected_taxa = character\(0\)\) \{.*?\n\}',
+                  '''compute_remove_taxa_for_sample <- function(gs, protected_taxa = character(0)) {\n  remove_taxa <- unique(gs$name_clean[gs$call == "Not prioritized"])\n  remove_taxa <- remove_taxa[!is.na(remove_taxa) & nzchar(remove_taxa)]\n  setdiff(remove_taxa, protected_taxa)\n}''',
+                  re.S,
+                  'cleaned report call selection'
+              )
+              t = t.replace('filter(rank %in% c("G", "S"), call == "Likely true")', 'filter(rank %in% c("G", "S"), call == "Prioritized")')
+              t = t.replace(
+                  'build_cleaned_report_for_sample <- function(raw_df, gs, quick, protected_taxa = character(0), keep_descendants = FALSE) {',
+                  'build_cleaned_report_for_sample <- function(raw_df, gs, protected_taxa = character(0), keep_descendants = FALSE) {'
+              )
+              t = t.replace(
+                  'compute_remove_taxa_for_sample(gs, quick = quick, protected_taxa = protected_taxa)',
+                  'compute_remove_taxa_for_sample(gs, protected_taxa = protected_taxa)'
+              )
+              t = re.sub(
+                  r'write_cleaned_reports <- function\(result, out_dir, quick = c\("false", "unc"\),\n\s*protected_taxa_map',
+                  'write_cleaned_reports <- function(result, out_dir,\n                                  protected_taxa_map',
+                  t
+              )
+              t = re.sub(r'^\s*quick = quick,\n', '', t, flags=re.M)
+              t = re.sub(r'^\s*quick_remove <- split_csv\(args\$quick_remove %\|\|% "false,unc"\)\n', '', t, flags=re.M)
+              t = re.sub(r'^\s*quick = quick_remove,\n', '', t, flags=re.M)
+              t = re.sub(r'^\s*"  --quick_remove false,unc,true",\n', '', t, flags=re.M)
+
+              if not is_app:
+                  t = sub1(
+                      t,
+                      r'default_metadata <- function\(sample_names\) \{\n\s*tibble\(\n\s*sample = as.character\(sample_names\),\n\s*group = "Group 1",\n\s*sample_type = "Clinical / sterile",\n\s*is_control = FALSE\n\s*\)\n\}',
+                      '''default_metadata <- function(sample_names) {\n  tibble(\n    sample = as.character(sample_names),\n    group = "Group 1",\n    sample_type = "Clinical / sterile"\n  )\n}''',
+                      label='default metadata'
+                  )
+
+              t = re.sub(r'^\s*if \(!"is_control" %in% colnames\(meta\)\) meta\$is_control <- FALSE\n', '', t, flags=re.M)
+              t = re.sub(r'^\s*if \(!\("is_control" %in% colnames\(meta\)\)\) meta\$is_control <- FALSE\n', '', t, flags=re.M)
+              t = re.sub(r'^\s*meta\$is_control <- .*\n', '', t, flags=re.M)
+              t = re.sub(r'^\s*is_control = tolower\(trimws\(as.character\(is_control\)\)\) %in% c\("true", "t", "1", "yes", "y"\),?\n', '', t, flags=re.M)
+              t = re.sub(r'^\s*is_control = dplyr::coalesce\(is_control, is_control.default\),?\n', '', t, flags=re.M)
+
+              t = t.replace(
+                  'n_true = sum(rank == tax_level_now & call == "Likely true", na.rm = TRUE),\n      n_uncertain = sum(rank == tax_level_now & call == "Uncertain", na.rm = TRUE),\n      n_contaminant = sum(rank == tax_level_now & call == "Likely false positive / background", na.rm = TRUE),',
+                  'n_prioritized = sum(rank == tax_level_now & call == "Prioritized", na.rm = TRUE),\n      n_not_prioritized = sum(rank == tax_level_now & call == "Not prioritized", na.rm = TRUE),'
+              )
+              t = t.replace(
+                  'select(-any_of(c("n_genus_qc", "n_species_qc", "shannon", "n_true", "n_uncertain", "n_contaminant")))',
+                  'select(-any_of(c("n_genus_qc", "n_species_qc", "shannon", "n_prioritized", "n_not_prioritized")))'
+              )
+
+              t = t.replace('"Likely true"', '"Prioritized"')
+              t = t.replace('"Likely false positive / background"', '"Not prioritized"')
+              t = t.replace('"Likely false positive/background"', '"Not prioritized"')
+              t = t.replace('"Uncertain"', '"Not prioritized"')
+              t = re.sub(r'\n\s*call == "Not prioritized" ~ 3,', '', t)
+              t = re.sub(r'\n\s*call == "Not prioritized" ~ 3L,', '', t)
+
+              if is_app:
+                  t = t.replace('sample_type = "Clinical / sterile",\n      is_control = FALSE', 'sample_type = "Clinical / sterile"')
+                  t = t.replace('select(sample, group, sample_type, is_control)', 'select(sample, group, sample_type)')
+                  t = re.sub(r'\n\s*\} else if \(j == 3\) \{\n\s*df\$is_control\[i\] <- .*?\n\s*\}', '\n    }', t, flags=re.S)
+                  t = re.sub(r'\n\s*is_control = tolower\(trimws\(as.character\(coalesce\(is_control, FALSE\)\)\)\) %in% c\("true", "t", "1", "yes", "y"\),', '', t)
+
+                  t = t.replace('n_true', 'n_prioritized').replace('n_uncertain', 'n_not_prioritized').replace('n_contaminant', 'n_not_prioritized')
+                  while 'n_not_prioritized = sum(rank == tax_level_now & call == "Not prioritized", na.rm = TRUE),\n        n_not_prioritized = sum(rank == tax_level_now & call == "Not prioritized", na.rm = TRUE),' in t:
+                      t = t.replace(
+                          'n_not_prioritized = sum(rank == tax_level_now & call == "Not prioritized", na.rm = TRUE),\n        n_not_prioritized = sum(rank == tax_level_now & call == "Not prioritized", na.rm = TRUE),',
+                          'n_not_prioritized = sum(rank == tax_level_now & call == "Not prioritized", na.rm = TRUE),'
+                      )
+                  t = t.replace('calls_true', 'calls_prioritized')
+
+                  t = re.sub(
+                      r'choices = c\(\n\s*"All" = "all",\n\s*"Prioritized" = "true",\n\s*"Not prioritized" = "unc",\n\s*"Not prioritized" = "false"\n\s*\),',
+                      'choices = c(\n                  "All" = "all",\n                  "Prioritized" = "prioritized",\n                  "Not prioritized" = "not_prioritized"\n                ),',
+                      t
+                  )
+                  t = re.sub(
+                      r'choices = c\(\n\s*"Prioritized" = "Prioritized",\n\s*"Not prioritized" = "Not prioritized",\n\s*"False positive/background" = "Not prioritized"\n\s*\),\n\s*selected = c\("Prioritized", "Not prioritized"\)',
+                      'choices = c(\n                  "Prioritized" = "Prioritized",\n                  "Not prioritized" = "Not prioritized"\n                ),\n                selected = c("Prioritized")',
+                      t
+                  )
+                  t = t.replace(
+                      'if (view_mode == "true") {\n            gs <- gs %>% filter(call == "Prioritized")\n          } else if (view_mode == "false") {\n            gs <- gs %>% filter(call == "Not prioritized")\n          } else if (view_mode == "unc") {\n            gs <- gs %>% filter(call == "Not prioritized")\n          }',
+                      'if (view_mode == "prioritized") {\n            gs <- gs %>% filter(call == "Prioritized")\n          } else if (view_mode == "not_prioritized") {\n            gs <- gs %>% filter(call == "Not prioritized")\n          }'
+                  )
+
+                  t = t.replace(
+                      '''          n_prioritized <- cs$n_prioritized %||% 0\n          n_not_prioritized <- cs$n_not_prioritized %||% 0\n          n_not_prioritized <- cs$n_not_prioritized %||% 0\n\n          pills <- tagList(\n            span(class = "call-pill pill-true", paste0("Prioritized: ", n_prioritized)),\n            span(style = "margin-left:8px;", class = "call-pill pill-unc", paste0("Not prioritized: ", n_not_prioritized)),\n            span(style = "margin-left:8px;", class = "call-pill pill-cont", paste0("Not prioritized: ", n_not_prioritized))\n          )''',
+                      '''          n_prioritized <- cs$n_prioritized %||% 0\n          n_not_prioritized <- cs$n_not_prioritized %||% 0\n\n          pills <- tagList(\n            span(class = "call-pill pill-true", paste0("Prioritized: ", n_prioritized)),\n            span(style = "margin-left:8px;", class = "call-pill pill-cont", paste0("Not prioritized: ", n_not_prioritized))\n          )'''
+                  )
+
+                  t = t.replace('        quick <- input[[paste0("decontam_quick_", sid)]] %||% character(0)\n', '')
+                  t = t.replace('            quick <- input[[paste0("decontam_quick_", sid)]] %||% character(0)\n', '')
+                  t = re.sub(
+                      r'\n\s*default_remove <- gs %>%.*?\n\s*tagList\(\n\s*checkboxInput\(paste0\("decontam_keep_desc_", sid\), "For kept genera include descendant species", value = FALSE\),\n\s*checkboxGroupInput\(.*?\n\s*br\(\),\n\s*selectizeInput\(',
+                      '\n          tagList(\n            checkboxInput(paste0("decontam_keep_desc_", sid), "For kept genera include descendant species", value = FALSE),\n            selectizeInput(',
+                      t,
+                      flags=re.S
+                  )
+                  t = re.sub(
+                      r'\n\s*observeEvent\(input\[\[paste0\("decontam_apply_quick_", sid\)\]\], \{.*?\n\s*\}\)\n\n\s*observeEvent\(input\[\[paste0\("decontam_clear_", sid\)\]\], \{.*?\n\s*\}\)',
+                      '',
+                      t,
+                      flags=re.S
+                  )
+                  t = t.replace(
+                      'Quick removal removes selected call categories. Use the search box below to keep specific taxa from being removed.',
+                      'Not-prioritized taxa are removed from cleaned reports by default. Use the search box below to keep specific taxa if needed.'
+                  )
+                  t = t.replace(
+                      'Default quick selection removes false-positive and uncertain taxa. Likely true taxa are kept by default.',
+                      'Cleaned reports remove not-prioritized taxa by default. Prioritized taxa are kept.'
+                  )
+                  t = t.replace(
+                      'Cleaned reports keep likely true taxa by default and preserve any additional taxa you explicitly keep in each sample tab.',
+                      'Cleaned reports keep prioritized taxa by default and preserve any additional taxa you explicitly keep in each sample tab.'
+                  )
+
+                  t = t.replace('High-confidence taxa (after Celltaminate scoring):', 'Prioritized taxa (after Celltaminate scoring):')
+                  t = t.replace('• The Celltaminate score weighs reference background, microbe abundance, and ambiguity to separate likely signal from likely background.<br/>', '• The Celltaminate score integrates quantitative sequence evidence, reference background, decontamination, and curated contextual evidence to prioritize microbial taxa.<br/>')
+                  t = t.replace('More likely to be true organism because', 'More strongly supported for prioritization because')
+                  t = t.replace('These findings support the idea that this organism is behaving like a meaningful biological signal rather than a common background organism.', 'These findings support prioritization of this organism over background-like taxa.')
+                  t = t.replace('More likely to be background organism because', 'More consistent with a not-prioritized background-like signal because')
+                  t = t.replace('These findings support the idea that this organism is behaving more like background contamination than a true biological signal.', 'These findings are more consistent with a background-like signal and therefore do not support prioritization.')
+                  t = t.replace('Interpretation: the final Celltaminate score is more likely to fall in the likely background range.', 'Interpretation: the final Celltaminate score is more likely to fall above the prioritization cutoff.')
+                  t = t.replace('Cohort heatmap (top likely-true taxa)', 'Cohort heatmap (top prioritized taxa)')
+                  t = t.replace('Celltaminate uses microbial abundance, cohort context, reference background, and other filters to summarize each sample in a way that is easier to interpret than a long Kraken report.', 'Celltaminate integrates quantitative sequence evidence, sterile-reference background, decontamination, and curated contextual evidence to summarize each sample in a way that is easier to interpret than a long Kraken report.')
+                  t = t.replace('likely true organism', 'prioritized organism').replace('likely true range', 'prioritized range').replace('likely true microbe versus likely background', 'prioritized versus not-prioritized microbial signal')
+
+              t = re.sub(r'^.*fp_falsepos_cutoff.*\n', '', t, flags=re.M)
+              for _ in range(8):
+                  t = re.sub(r',(\s*\n\s*\))', r'\1', t)
+
+              path.write_text(t)
+
+          clean_r(Path('scripts/Celltaminate.R'), is_app=False)
+          clean_r(Path('app/Celltaminate_app.R'), is_app=True)
+          PY
+
+      - name: Update launcher, metadata example, and documentation
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path('bin/celltaminate')
+          t = p.read_text()
+          t = t.replace('required = {"sample", "group", "sample_type", "is_control"}', 'required = {"sample", "group", "sample_type"}')
+          t = t.replace('"sample\\tgroup\\tsample_type\\tis_control\\n"', '"sample\\tgroup\\tsample_type\\n"')
+          t = t.replace('"sample1.kraken.report.txt\\tGroup 1\\tClinical\\tFALSE\\n",', '"sample1.kraken.report.txt\\tGroup 1\\tClinical\\n",')
+          t = re.sub(r'^\s*"--fp_falsepos_cutoff".*\n', '', t, flags=re.M)
+          t = re.sub(r'^\s*"--quick_remove".*\n', '', t, flags=re.M)
+          t = re.sub(r'^\s*run\.add_argument\("--fp-falsepos-cutoff".*\n', '', t, flags=re.M)
+          t = re.sub(r'^\s*run\.add_argument\("--quick-remove".*\n', '', t, flags=re.M)
+          p.write_text(t)
+
+          meta = Path('examples/lung_nanopore/metadata.tsv')
+          if meta.exists():
+              rows = [line.split('\t') for line in meta.read_text().splitlines()]
+              if rows and 'is_control' in rows[0]:
+                  idx = rows[0].index('is_control')
+                  rows = [[x for j, x in enumerate(row) if j != idx] for row in rows]
+                  meta.write_text('\n'.join('\t'.join(row) for row in rows) + '\n')
+
+          Path('README.md').write_text('''# Celltaminate\n\n**Celltaminate** is an R-based command-line and Shiny application for contamination-aware prioritization of microbial taxa from host-dominated sequencing data.\n\nCelltaminate starts from Kraken2 or KrakenUniq taxonomic reports and integrates quantitative sequence evidence, taxonomic ambiguity, sterile-reference background, decontamination, curated clinical-pathogen and kitome/background evidence, and selected interaction terms into a continuous score from 0 to 100.\n\nLower scores indicate stronger support for prioritization. The default operating rule is:\n\n```text\nscore <= 1    prioritized\nscore > 1     not prioritized\n```\n\nThe score is a logistic mapping of the fitted regularized model and is not a calibrated probability.\n\n## Installation\n\n```bash\ngit clone https://github.com/as4184/Celltaminate.git\ncd Celltaminate\nconda env create -f environment.yml\nconda activate celltaminate\nbin/celltaminate --help\n```\n\nDownload the sterile-reference background table:\n\n```bash\nbin/celltaminate download-reference\n```\n\nReference DOI: `10.5281/zenodo.20560460`\n\n## Quick start\n\nRun the bundled example:\n\n```bash\nbash examples/lung_nanopore/run_example.sh\n```\n\nRun Celltaminate on your own reports:\n\n```bash\nbin/celltaminate run \\\n  --reports sample1.kraken.report.txt sample2.kraken.report.txt \\\n  --outdir celltaminate_results\n```\n\nOptional metadata can be supplied with `--metadata metadata.tsv`. Metadata contain `sample`, `group`, and `sample_type`.\n\n## Shiny application\n\n```bash\nbin/celltaminate app\n```\n\n## Input\n\nCelltaminate accepts Kraken2 6-column reports, Kraken2 8-column reports with minimizer data, and KrakenUniq 8-column reports. Eight-column reports are preferred because unique k-mer/minimizer support is part of the fitted scoring model.\n\n## Output\n\nThe primary per-sample tables report taxon-level evidence, the Celltaminate score, and the binary call `Prioritized` or `Not prioritized`. Cleaned reports retain prioritized taxa by default.\n\n## Documentation\n\n- [Installation](docs/installation.md)\n- [Quick start](docs/quickstart.md)\n- [Input formats](docs/input_formats.md)\n- [Output files](docs/output_files.md)\n- [Reference data](docs/reference_data.md)\n- [Score interpretation](docs/scoring.md)\n- [Shiny application](docs/shiny_app.md)\n- [Troubleshooting](docs/troubleshooting.md)\n\n## Citation metadata\n\nSee [`CITATION.cff`](CITATION.cff).\n\n## License\n\nSee [`LICENSE.md`](LICENSE.md).\n''')
+
+          Path('docs/scoring.md').write_text('''# Score interpretation\n\nCelltaminate reports a score from 0 to 100 for each retained genus- or species-level taxon. Lower scores indicate stronger support for prioritization, whereas higher scores indicate stronger background-like evidence.\n\nThe deployed model integrates retained terms from abundance, unique k-mer support, taxonomic ambiguity, sterile-reference background, decontamination, curated clinical-pathogen and kitome/background membership, and selected interactions between these evidence layers.\n\nThe default operating rule is:\n\n```text\nscore <= 1    prioritized\nscore > 1     not prioritized\n```\n\nThe prioritization threshold can be changed with `--fp-true-cutoff`. Changing the threshold changes the binary call but does not change the underlying Celltaminate score.\n\nExample:\n\n```bash\nbin/celltaminate run \\\n  --input-list input_list.txt \\\n  --outdir results \\\n  --fp-true-cutoff 1\n```\n\nThe Celltaminate score is a logistic mapping of the fitted regularized model and should not be interpreted as a calibrated probability.\n''')
+
+          Path('docs/input_formats.md').write_text('''# Input formats\n\n## Kraken reports\n\nCelltaminate accepts Kraken2 6-column reports, Kraken2 8-column reports with minimizer data, and KrakenUniq 8-column reports. The original indentation of taxon names must be preserved because it is used to reconstruct the taxonomic lineage. Eight-column reports are preferred because the fitted score uses unique k-mer/minimizer support.\n\n## Input list\n\n`input_list.txt` contains one report path per line:\n\n```text\nsample1.kraken.report.txt\nsample2.kraken.report.txt\n```\n\nRelative paths are interpreted relative to the input-list location.\n\n## Metadata\n\nMetadata are optional and tab-separated:\n\n```text\nsample\tgroup\tsample_type\nsample1.kraken.report.txt\tCase\tNanopore\nsample2.kraken.report.txt\tCase\tNanopore\n```\n\nColumns:\n\n- `sample`: report basename;\n- `group`: biological or study group;\n- `sample_type`: sample or sequencing description.\n''')
+
+          Path('docs/output_files.md').write_text('''# Output files\n\nA Celltaminate run writes tables, plots, cleaned reports, and a run summary.\n\nThe main taxon-level outputs are in `output_dir/tables/per_sample/`. Important columns include taxon name, clade reads, RPM, RPMM, decontaminated RPMM, `Celltaminate_Score`, `Call`, and `Call_reason`.\n\nThe binary call is:\n\n```text\nscore <= 1    Prioritized\nscore > 1     Not prioritized\n```\n\nCleaned Kraken-style reports retain prioritized taxa by default. The original taxonomic report is not modified.\n''')
+
+          Path('docs/shiny_app.md').write_text('''# Shiny application\n\nLaunch the application with:\n\n```bash\nbin/celltaminate app\n```\n\nThe application allows users to upload Kraken2 or KrakenUniq reports, choose genus- or species-level analysis, adjust the prioritization threshold, inspect binary prioritized/not-prioritized results, and review abundance, score, taxonomy, and curated contextual information.\n\nThe bundled kitome/background and clinical-pathogen panels are loaded automatically. The reference background table is loaded automatically when `data/reference/refined_cell.lines.tsv` is present.\n''')
+
+          Path('docs/quickstart.md').write_text('''# Quick start\n\n## 1. Activate the environment\n\n```bash\nconda activate celltaminate\n```\n\n## 2. Download the reference background table\n\n```bash\nbin/celltaminate download-reference\n```\n\n## 3. Run the bundled example\n\n```bash\nbash examples/lung_nanopore/run_example.sh\n```\n\n## 4. Run your own Kraken reports\n\n```bash\nbin/celltaminate run \\\n  --reports sample1.kraken.report.txt sample2.kraken.report.txt \\\n  --outdir celltaminate_results\n```\n\nMetadata are optional. Supply `--metadata metadata.tsv` when group or sample-type annotations are useful.\n\n## 5. Launch the Shiny application\n\n```bash\nbin/celltaminate app\n```\n''')
+          PY
+
+      - name: Validate syntax and current behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile bin/celltaminate
+          python3 bin/celltaminate --help >/dev/null
+          python3 bin/celltaminate run --help >/dev/null
+          python3 bin/celltaminate app --help >/dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq r-base-core >/dev/null
+          Rscript -e "parse(file='scripts/Celltaminate.R'); parse(file='app/Celltaminate_app.R')" >/dev/null
+
+          python3 bin/celltaminate run \
+            --input-list examples/lung_nanopore/input_list.txt \
+            --metadata examples/lung_nanopore/metadata.tsv \
+            --outdir /tmp/celltaminate_dry_run \
+            --dry-run >/dev/null
+
+          if grep -RniE --exclude-dir=.git --exclude='*.tsv' --exclude='cleanup-current-model.yml' --exclude='audit-obsolete.yml' --exclude='remove-obsolete.yml' --exclude='remove-obsolete-v2.yml' \
+            'Likely true|Likely false|Uncertain|three-tier|fp_falsepos_cutoff|fp-falsepos-cutoff|is_control|control_prevalence|control_median|mean_rpmm_control|median_rpmm_control|quick_remove|quick-remove|decontam_quick|decontam_apply_quick|calls_true|n_true|n_uncertain|n_contaminant' \
+            README.md docs bin scripts app examples; then
+            echo 'Obsolete patterns remain.' >&2
+            exit 1
+          fi
+
+          grep -q 'score <= 1    prioritized' README.md
+          grep -q 'score > 1     not prioritized' README.md
+          grep -q 'fp_true_flag ~ "Prioritized"' scripts/Celltaminate.R
+          grep -q 'TRUE ~ "Not prioritized"' scripts/Celltaminate.R
+          grep -q 'fp_true_flag ~ "Prioritized"' app/Celltaminate_app.R
+          grep -q 'TRUE ~ "Not prioritized"' app/Celltaminate_app.R
+
+      - name: Commit validated cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/audit-obsolete.yml
+          rm -f .github/workflows/remove-obsolete.yml
+          rm -f .github/workflows/remove-obsolete-v2.yml
+          rm -f .github/workflows/cleanup-current-model.yml
+          rm -f .audit_obsolete_trigger
+          rm -f .remove_obsolete_trigger
+          rm -f .remove_obsolete_trigger2
+          rm -f .cleanup_current_trigger
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Align software with current binary prioritization model'
+          git push origin HEAD:cleanup-current-model
