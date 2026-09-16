@@ -1,0 +1,108 @@
+name: remove-obsolete-v2
+
+on:
+  push:
+    branches: [ cleanup-current-model ]
+    paths:
+      - '.remove_obsolete_trigger2'
+
+permissions:
+  contents: write
+
+jobs:
+  clean:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: cleanup-current-model
+          fetch-depth: 0
+      - name: Rewrite R sources to current binary workflow
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          def clean_r(path):
+              t = path.read_text()
+              for a,b in [
+                  ('Likely false positive / background','Not prioritized'),
+                  ('Likely false positive/background','Not prioritized'),
+                  ('Likely true','Prioritized'),
+                  ('Uncertain','Not prioritized'),
+                  ('likely false positive / background','not prioritized'),
+                  ('likely false positive/background','not prioritized'),
+                  ('likely true','prioritized'),
+                  ('uncertain','not prioritized')]:
+                  t=t.replace(a,b)
+
+              t = re.sub(r'call_bucket_label <- function\(call\) \{.*?CALL_PALETTE <- c\(.*?\)\n', '''call_bucket_label <- function(call) {\n  dplyr::case_when(\n    call == "Prioritized" ~ "Prioritized",\n    TRUE ~ "Not prioritized"\n  )\n}\n\nCALL_BUCKET_LEVELS <- c("Prioritized", "Not prioritized")\nCALL_PALETTE <- c("Prioritized" = "#2E7D32", "Not prioritized" = "#8B0000")\n''', t, flags=re.S)
+
+              t = re.sub(r'\n  control_samples <- character\(0\).*?\n  base_filt <-', '\n  use_cohort_prevalence <- is.finite(n_samples) && n_samples >= 3\n\n  base_filt <-', t, flags=re.S)
+              t = re.sub(r'\n  if \(n_controls > 0\) \{.*?\n  \}\n\n  tax_cor <-', '\n\n  tax_cor <-', t, flags=re.S)
+              t = t.replace('mutate(bg_rpmm = pmax(coalesce0(median_rpmm_control_detected), coalesce0(ref_med_rpmm), coalesce0(cohort_bg_rpmm)))','mutate(bg_rpmm = pmax(coalesce0(ref_med_rpmm), coalesce0(cohort_bg_rpmm)))')
+
+              # Remove upper-cutoff UI before generic upper-cutoff cleanup.
+              t = re.sub(r'\n\s*sliderInput\(\n\s*"fp_falsepos_cutoff",.*?\n\s*\),', '', t, flags=re.S)
+              t = re.sub(r'\n\s*fp_falsepos_cutoff\s*=\s*\n\s*ui_default\(\n\s*defaults,\n\s*"fp_falsepos_cutoff",\n\s*75\n\s*\),?', '', t)
+              t = re.sub(r'\n\s*fp_falsepos_cutoff\s*=\s*\n\s*as.numeric\(\n\s*input\$fp_falsepos_cutoff\s*%\|\|%\s*\n\s*ui_default\(.*?\n\s*\),?','',t,flags=re.S)
+              t = re.sub(r'\n\s*fp_falsepos_cutoff\s*=\s*as.numeric\(\s*args\$fp_falsepos_cutoff\s*%\|\|%\s*75\s*\),?', '', t)
+
+              for pat in [r'^.*control_prevalence.*\n',r'^.*mean_rpmm_control_detected.*\n',r'^.*median_rpmm_control_detected.*\n',r'^.*control_median_rpmm.*\n',r'^.*log2FC_vs_control_median.*\n',r'^.*enriched_vs_controls.*\n',r'^.*is_control.*\n']:
+                  t=re.sub(pat,'',t,flags=re.M)
+
+              t = re.sub(r'\n      fp_falsepos_flag =\n        fp_score >=\n        params\$fp_falsepos_cutoff,?', '', t)
+              t = re.sub(r'call = case_when\(\n        !is_microbial \| is_host \| is_plant ~ "Non-microbial / Host",.*?\n      \),\n      call_reason = case_when\(.*?\n      \)\n    \)', '''call = case_when(\n        !is_microbial | is_host | is_plant ~ "Non-microbial / Host",\n        fp_true_flag ~ "Prioritized",\n        TRUE ~ "Not prioritized"\n      ),\n      call_reason = case_when(\n        !is_microbial | is_host | is_plant ~ "Excluded as non-microbial or host",\n        call == "Prioritized" ~ paste0("Score ", round(fp_score, 1), " <= prioritization cutoff ", round(params$fp_true_cutoff, 1)),\n        TRUE ~ paste0("Score ", round(fp_score, 1), " > prioritization cutoff ", round(params$fp_true_cutoff, 1))\n      )\n    )''', t, flags=re.S)
+
+              # Remove any remaining upper-cutoff lines after binary call replacement.
+              t = re.sub(r'^.*fp_falsepos_cutoff.*\n','',t,flags=re.M)
+
+              t = re.sub(r'compute_remove_taxa_for_sample <- function\(gs, quick, protected_taxa = character\(0\)\) \{.*?\n\}', '''compute_remove_taxa_for_sample <- function(gs, protected_taxa = character(0)) {\n  remove_taxa <- unique(gs$name_clean[gs$call == "Not prioritized"])\n  remove_taxa <- remove_taxa[!is.na(remove_taxa) & nzchar(remove_taxa)]\n  setdiff(remove_taxa, protected_taxa)\n}''', t, flags=re.S)
+              t=t.replace('build_cleaned_report_for_sample <- function(raw_df, gs, quick, protected_taxa = character(0), keep_descendants = FALSE) {','build_cleaned_report_for_sample <- function(raw_df, gs, protected_taxa = character(0), keep_descendants = FALSE) {')
+              t=t.replace('compute_remove_taxa_for_sample(gs, quick = quick, protected_taxa = protected_taxa)','compute_remove_taxa_for_sample(gs, protected_taxa = protected_taxa)')
+              t=re.sub(r'write_cleaned_reports <- function\(result, out_dir, quick = c\("false", "unc"\),\n\s*protected_taxa_map','write_cleaned_reports <- function(result, out_dir,\n                                  protected_taxa_map',t)
+              t=re.sub(r'^\s*quick = quick,\n','',t,flags=re.M)
+              t=re.sub(r'^\s*quick_remove <- .*\n','',t,flags=re.M)
+              t=re.sub(r'^\s*quick = quick_remove,\n','',t,flags=re.M)
+              t=re.sub(r'^.*quick_remove.*\n','',t,flags=re.M)
+
+              t = re.sub(r'default_metadata <- function\(sample_names\) \{.*?\n\}', '''default_metadata <- function(sample_names) {\n  tibble(\n    sample = as.character(sample_names),\n    group = "Group 1",\n    sample_type = "Clinical / sterile"\n  )\n}''', t, flags=re.S)
+
+              # Binary names in summaries and filters.
+              t=t.replace('n_true','n_prioritized').replace('n_uncertain','n_not_prioritized').replace('n_contaminant','n_not_prioritized_background')
+              t=re.sub(r'\n\s*call == "Not prioritized" ~ 3,','',t)
+              t=re.sub(r'\n\s*call == "Not prioritized" ~ "Not prioritized",\n\s*TRUE ~ "Not prioritized"','\n    TRUE ~ "Not prioritized"',t)
+
+              # Remove obsolete binary-incompatible app choice blocks for the old three-call selector.
+              t = re.sub(r'choices\s*=\s*c\(\s*"Prioritized"\s*=\s*"Prioritized",\s*"Not prioritized"\s*=\s*"Not prioritized",\s*"False positive/background"\s*=\s*"Not prioritized"\s*\)', 'choices = c("Prioritized" = "Prioritized", "Not prioritized" = "Not prioritized")', t, flags=re.S)
+              t = t.replace('selected = c("Prioritized", "Not prioritized")','selected = c("Prioritized")')
+
+              # Remove trailing commas created when obsolete final arguments were deleted.
+              for _ in range(5):
+                  t=re.sub(r',\s*\n(\s*\))', r'\n\1', t)
+
+              path.write_text(t)
+
+          for f in [Path('scripts/Celltaminate.R'),Path('app/Celltaminate_app.R')]: clean_r(f)
+          PY
+
+      - name: Validate R syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq r-base-core >/dev/null
+          Rscript -e "parse(file='scripts/Celltaminate.R'); parse(file='app/Celltaminate_app.R')" >/dev/null
+      - name: Commit R source cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .remove_obsolete_trigger2
+          rm -f .github/workflows/remove-obsolete-v2.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add scripts/Celltaminate.R app/Celltaminate_app.R
+          git add -u
+          git commit -m 'Use binary prioritization and remove control-sample paths'
+          git push origin HEAD:cleanup-current-model
