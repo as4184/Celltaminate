@@ -186,6 +186,7 @@ jobs:
                       )
                   t = t.replace('calls_true', 'calls_prioritized')
                   t = t.replace('span(class = "call-pill pill-true", paste0("Likely true: ", n_prioritized))', 'span(class = "call-pill pill-true", paste0("Prioritized: ", n_prioritized))')
+                  t = t.replace('            span(style = "margin-left:8px;", class = "call-pill pill-unc", paste0("Uncertain: ", n_unc)),\n', '')
                   t = re.sub(r'^\\s*span\\(style = "margin-left:8px;", class = "call-pill pill-unc", paste0\\("Uncertain: ", n_unc\\)\\),\\n', '', t, flags=re.M)
                   t = t.replace('span(style = "margin-left:8px;", class = "call-pill pill-cont", paste0("Likely false positive/background: ", n_cont))', 'span(style = "margin-left:8px;", class = "call-pill pill-cont", paste0("Not prioritized: ", n_cont))')
 
