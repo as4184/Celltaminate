@@ -12,7 +12,7 @@
 #
 # Optional arguments:
 #   --metadata_tsv               Metadata table with columns:
-#                                sample, group, sample_type, is_control
+#                                sample, group, sample_type
 #   --input_list                 Text file with one report path per line
 #   --tax_level                  G or S [default: S]
 #   --host_species               Comma-separated: human,mouse,drosophila [default: human]
@@ -21,12 +21,10 @@
 #   --collapse_species           TRUE/FALSE [default: TRUE]
 #   --collapse_min_genus_reads   Integer [default: 30]
 #   --collapse_top_frac          Numeric [default: 0.85]
-#   --fp_falsepos_cutoff         Numeric [default: 75]
 #   --fp_true_cutoff             Numeric [default: 1]
 #   --ref_bg_tsv                 Reference background TSV
 #   --kitome_blacklist_tsv       Kitome/background blacklist TSV
 #   --clinical_panel_tsv         Clinically important pathogens TSV
-#   --quick_remove               Comma-separated: false,unc,true [default: false,unc]
 #   --protected_taxa_tsv         Optional TSV with columns sample and taxon
 #   --keep_descendants           TRUE/FALSE [default: FALSE]
 #   --show_fp_breakdown          TRUE/FALSE [default: FALSE]
@@ -117,22 +115,19 @@ ui_default <- function(defaults, name, fallback) {
 
 call_bucket_label <- function(call) {
   dplyr::case_when(
-    call == "Likely true" ~ "Likely true",
-    call == "Likely false positive / background" ~ "Likely false positive/background",
-    TRUE ~ "Uncertain"
+    call == "Prioritized" ~ "Prioritized",
+    TRUE ~ "Not prioritized"
   )
 }
 
 CALL_BUCKET_LEVELS <- c(
-  "Likely true",
-  "Uncertain",
-  "Likely false positive/background"
+  "Prioritized",
+  "Not prioritized"
 )
 
 CALL_PALETTE <- c(
-  "Likely false positive/background" = "#8B0000",
-  "Uncertain" = "#FF9800",
-  "Likely true" = "#2E7D32"
+  "Prioritized" = "#2E7D32",
+  "Not prioritized" = "#8B0000"
 )
 
 make_prevalence_abundance_df <- function(gs_long, tax_level = "S", total_samples = NULL) {
@@ -185,7 +180,7 @@ make_prevalence_abundance_df <- function(gs_long, tax_level = "S", total_samples
   prev_df %>%
     left_join(bucket_df, by = "name_clean") %>%
     mutate(
-      call_bucket = dplyr::coalesce(call_bucket, "Uncertain"),
+      call_bucket = dplyr::coalesce(call_bucket, "Not prioritized"),
       prevalence = cap(prevalence, 0, 1)
     )
 }
@@ -194,7 +189,7 @@ get_bioai_taxa_info <- function(gs, tax_level = "S") {
   if (is.null(gs) || nrow(gs) == 0) {
     return(list(
       candidates = character(0),
-      true_taxa = character(0),
+      prioritized_taxa = character(0),
       initial_selected = character(0),
       initial_choices = character(0)
     ))
@@ -204,10 +199,8 @@ get_bioai_taxa_info <- function(gs, tax_level = "S") {
     filter(rank == tax_level, call != "Non-microbial / Host", is.finite(rpmm), nzchar(name_clean)) %>%
     mutate(
       call_priority = dplyr::case_when(
-        call == "Likely true" ~ 1,
-        call == "Uncertain" ~ 2,
-        call == "Likely false positive / background" ~ 3,
-        TRUE ~ 4
+        call == "Prioritized" ~ 1,
+        TRUE ~ 2
       )
     )
 
@@ -216,18 +209,18 @@ get_bioai_taxa_info <- function(gs, tax_level = "S") {
     pull(name_clean) %>%
     unique()
 
-  true_taxa <- base %>%
-    filter(call == "Likely true") %>%
+  prioritized_taxa <- base %>%
+    filter(call == "Prioritized") %>%
     arrange(desc(rpmm)) %>%
     pull(name_clean) %>%
     unique()
 
-  initial_selected <- if (length(true_taxa) > 0) true_taxa else head(candidates, 3)
+  initial_selected <- if (length(prioritized_taxa) > 0) prioritized_taxa else head(candidates, 3)
   initial_choices <- unique(c(initial_selected, head(candidates, 100)))
 
   list(
     candidates = as.character(candidates),
-    true_taxa = as.character(true_taxa),
+    prioritized_taxa = as.character(prioritized_taxa),
     initial_selected = as.character(initial_selected),
     initial_choices = as.character(initial_choices)
   )
@@ -1339,16 +1332,7 @@ compute_taxon_features <- function(gs_long, meta_df, params, user_contam = chara
 
   n_samples <- meta_df %>% distinct(sample) %>% nrow()
 
-  control_samples <- character(0)
-  if ("is_control" %in% colnames(meta_df)) {
-    control_flag <- tolower(trimws(as.character(meta_df$is_control))) %in% c("true", "t", "1", "yes", "y")
-    control_samples <- unique(as.character(meta_df$sample[!is.na(control_flag) & control_flag]))
-    control_samples <- control_samples[nzchar(control_samples)]
-  }
-  n_controls <- length(unique(control_samples))
-  
   use_cohort_prevalence <- is.finite(n_samples) && n_samples >= 3
-  use_control_prevalence <- is.finite(n_controls) && n_controls >= 3
   
   base_filt <- gs_long$is_microbial & !gs_long$is_host & !gs_long$is_plant & gs_long$rank %in% c("G", "S")
 
@@ -1391,52 +1375,6 @@ compute_taxon_features <- function(gs_long, meta_df, params, user_contam = chara
       )
     )
 
-  if (n_controls > 0) {
-    control_tax <- gs_long %>%
-      filter(base_filt, sample %in% control_samples) %>%
-      group_by(rank, name_clean) %>%
-      summarise(
-        control_prevalence = if_else(
-          use_control_prevalence,
-          n_distinct(sample[is.finite(reads_clade) & reads_clade > 0]) / n_controls,
-          NA_real_
-        ),
-        mean_rpmm_control_detected = if_else(
-          any(is.finite(reads_clade) & reads_clade > 0),
-          mean(rpmm[is.finite(reads_clade) & reads_clade > 0], na.rm = TRUE),
-          NA_real_
-        ),
-        median_rpmm_control_detected = if_else(
-          any(is.finite(reads_clade) & reads_clade > 0),
-          median(rpmm[is.finite(reads_clade) & reads_clade > 0], na.rm = TRUE),
-          NA_real_
-        ),
-        .groups = "drop"
-      )
-    
-    tax_base <- tax_base %>%
-      left_join(control_tax, by = c("rank", "name_clean")) %>%
-      mutate(
-        control_prevalence = if_else(use_control_prevalence, coalesce(control_prevalence, 0), NA_real_),
-        mean_rpmm_control_detected = case_when(
-          use_control_prevalence & control_prevalence == 0 ~ 0,
-          is.finite(mean_rpmm_control_detected) ~ mean_rpmm_control_detected,
-          TRUE ~ NA_real_
-        ),
-        median_rpmm_control_detected = case_when(
-          use_control_prevalence & control_prevalence == 0 ~ 0,
-          is.finite(median_rpmm_control_detected) ~ median_rpmm_control_detected,
-          TRUE ~ NA_real_
-        )
-      )
-  } else {
-    tax_base <- tax_base %>%
-      mutate(
-        control_prevalence = NA_real_,
-        mean_rpmm_control_detected = NA_real_,
-        median_rpmm_control_detected = NA_real_
-      )
-  }
 
   tax_cor <- gs_long %>%
     filter(base_filt) %>%
@@ -1499,7 +1437,7 @@ compute_taxon_features <- function(gs_long, meta_df, params, user_contam = chara
   }
 
   tax_base <- tax_base %>%
-    mutate(bg_rpmm = pmax(coalesce0(median_rpmm_control_detected), coalesce0(ref_med_rpmm), coalesce0(cohort_bg_rpmm)))
+    mutate(bg_rpmm = pmax(coalesce0(ref_med_rpmm), coalesce0(cohort_bg_rpmm)))
 
   sample_priors <- compute_sample_priors(gs_long, meta_df, params, ref_comp_genus = REF_BG$comp_genus)
 
@@ -1892,7 +1830,6 @@ apply_calls <- function(gs_long, tax_features, meta_df, params, sample_priors) {
       name_clean,
       prevalence,
       prevalence_any,
-      control_prevalence,
       ubiquity,
       cor_with_biomass,
       cor_with_nonmicrobe_frac,
@@ -1905,7 +1842,6 @@ apply_calls <- function(gs_long, tax_features, meta_df, params, sample_priors) {
       ref_q95_log,
       ref_q99_log,
       ref_med_rpmm,
-      median_rpmm_control_detected,
       cohort_bg_rpmm,
       bg_rpmm
     )
@@ -1923,7 +1859,6 @@ apply_calls <- function(gs_long, tax_features, meta_df, params, sample_priors) {
       ref_q95_log = suppressWarnings(as.numeric(ref_q95_log)),
       ref_q99_log = suppressWarnings(as.numeric(ref_q99_log)),
       ref_med_rpmm = suppressWarnings(as.numeric(ref_med_rpmm)),
-      median_rpmm_control_detected = suppressWarnings(as.numeric(median_rpmm_control_detected)),
       cohort_bg_rpmm = suppressWarnings(as.numeric(cohort_bg_rpmm)),
       bg_rpmm = suppressWarnings(as.numeric(bg_rpmm))
     )
@@ -1931,10 +1866,7 @@ apply_calls <- function(gs_long, tax_features, meta_df, params, sample_priors) {
   out <- out %>%
     mutate(
       reference_median_rpmm = if_else(is.finite(ref_med_rpmm), ref_med_rpmm, NA_real_),
-      control_median_rpmm = if_else(is.finite(median_rpmm_control_detected), median_rpmm_control_detected, NA_real_),
       log2FC_vs_reference_median = log2((coalesce0(rpmm) + params$fc_pseudocount) / (coalesce0(reference_median_rpmm) + params$fc_pseudocount)),
-      log2FC_vs_control_median = log2((coalesce0(rpmm) + params$fc_pseudocount) / (coalesce0(control_median_rpmm) + params$fc_pseudocount)),
-      enriched_vs_controls = if_else(is.finite(control_median_rpmm), log2FC_vs_control_median > 0, NA),
       qc_pass = is_microbial & !is_host & !is_plant
     )
 
@@ -1975,10 +1907,6 @@ apply_calls <- function(gs_long, tax_features, meta_df, params, sample_priors) {
       fp_score =
         score_result$fp_score,
       
-      fp_falsepos_flag =
-        fp_score >=
-        params$fp_falsepos_cutoff,
-      
       fp_true_flag =
         fp_score <=
         params$fp_true_cutoff
@@ -1988,38 +1916,18 @@ apply_calls <- function(gs_long, tax_features, meta_df, params, sample_priors) {
     mutate(
       call = case_when(
         !is_microbial | is_host | is_plant ~ "Non-microbial / Host",
-        fp_true_flag ~ "Likely true",
-        fp_falsepos_flag ~ "Likely false positive / background",
-        TRUE ~ "Uncertain"
+        fp_true_flag ~ "Prioritized",
+        TRUE ~ "Not prioritized"
       ),
       call_reason = case_when(
-        !is_microbial | is_host | is_plant ~
-          "Excluded as non-microbial or host",
-        
-        call == "Likely true" ~ paste0(
-          "Score ",
-          round(fp_score, 1),
-          " <= likely true cutoff ",
-          round(params$fp_true_cutoff, 1),
-          "; calibrated evidence supports a likely true microbial signal"
+        !is_microbial | is_host | is_plant ~ "Excluded as non-microbial or host",
+        call == "Prioritized" ~ paste0(
+          "Score ", round(fp_score, 1),
+          " <= prioritization cutoff ", round(params$fp_true_cutoff, 1)
         ),
-        
-        call == "Likely false positive / background" ~ paste0(
-          "Score ",
-          round(fp_score, 1),
-          " >= false positive cutoff ",
-          round(params$fp_falsepos_cutoff, 1),
-          "; calibrated evidence supports background or contamination"
-        ),
-        
         TRUE ~ paste0(
-          "Score ",
-          round(fp_score, 1),
-          " is between ",
-          round(params$fp_true_cutoff, 1),
-          " and ",
-          round(params$fp_falsepos_cutoff, 1),
-          "; evidence is mixed between true-signal and background patterns"
+          "Score ", round(fp_score, 1),
+          " > prioritization cutoff ", round(params$fp_true_cutoff, 1)
         )
       )
     )
@@ -2064,27 +1972,15 @@ get_kraken_tree_info <- function(raw_df) {
   )
 }
 
-compute_remove_taxa_for_sample <- function(gs, quick, protected_taxa = character(0)) {
-  remove_taxa <- character(0)
-
-  if ("false" %in% quick) {
-    remove_taxa <- c(remove_taxa, gs$name_clean[gs$call == "Likely false positive / background"])
-  }
-  if ("unc" %in% quick) {
-    remove_taxa <- c(remove_taxa, gs$name_clean[gs$call == "Uncertain"])
-  }
-  if ("true" %in% quick) {
-    remove_taxa <- c(remove_taxa, gs$name_clean[gs$call == "Likely true"])
-  }
-
-  remove_taxa <- unique(remove_taxa)
+compute_remove_taxa_for_sample <- function(gs, protected_taxa = character(0)) {
+  remove_taxa <- unique(gs$name_clean[gs$call == "Not prioritized"])
   remove_taxa <- remove_taxa[!is.na(remove_taxa) & nzchar(remove_taxa)]
   setdiff(remove_taxa, protected_taxa)
 }
 
 compute_keep_taxa_for_sample <- function(gs, remove_taxa, protected_taxa = character(0)) {
   keep_taxa <- gs %>%
-    filter(rank %in% c("G", "S"), call == "Likely true") %>%
+    filter(rank %in% c("G", "S"), call == "Prioritized") %>%
     pull(name_clean) %>%
     unique()
 
@@ -2191,8 +2087,8 @@ retain_kraken_raw <- function(raw_df, keep_taxa, keep_descendants = FALSE, keep_
   cleaned
 }
 
-build_cleaned_report_for_sample <- function(raw_df, gs, quick, protected_taxa = character(0), keep_descendants = FALSE) {
-  remove_taxa <- compute_remove_taxa_for_sample(gs, quick = quick, protected_taxa = protected_taxa)
+build_cleaned_report_for_sample <- function(raw_df, gs, protected_taxa = character(0), keep_descendants = FALSE) {
+  remove_taxa <- compute_remove_taxa_for_sample(gs, protected_taxa = protected_taxa)
   keep_taxa <- compute_keep_taxa_for_sample(gs, remove_taxa = remove_taxa, protected_taxa = protected_taxa)
   retain_kraken_raw(raw_df, keep_taxa = keep_taxa, keep_descendants = keep_descendants)
 }
@@ -2303,12 +2199,10 @@ HELP_TEXT <- paste(
   "  --collapse_species TRUE|FALSE",
   "  --collapse_min_genus_reads INTEGER",
   "  --collapse_top_frac NUMERIC",
-  "  --fp_falsepos_cutoff NUMERIC",
   "  --fp_true_cutoff NUMERIC",
   "  --ref_bg_tsv PATH",
   "  --kitome_blacklist_tsv PATH",
   "  --clinical_panel_tsv PATH",
-  "  --quick_remove false,unc,true",
   "  --protected_taxa_tsv PATH",
   "  --keep_descendants TRUE|FALSE",
   "  --show_fp_breakdown TRUE|FALSE",
@@ -2474,8 +2368,7 @@ default_metadata <- function(sample_names) {
   tibble(
     sample = as.character(sample_names),
     group = "Group 1",
-    sample_type = "Clinical / sterile",
-    is_control = FALSE
+    sample_type = "Clinical / sterile"
   )
 }
 
@@ -2505,14 +2398,12 @@ load_metadata <- function(metadata_tsv, sample_names) {
 
   if (!"group" %in% colnames(meta)) meta$group <- "Group 1"
   if (!"sample_type" %in% colnames(meta)) meta$sample_type <- "Clinical / sterile"
-  if (!"is_control" %in% colnames(meta)) meta$is_control <- FALSE
 
   meta <- meta %>%
     transmute(
       sample = as.character(sample),
       group = as.character(group),
-      sample_type = as.character(sample_type),
-      is_control = tolower(trimws(as.character(is_control))) %in% c("true", "t", "1", "yes", "y")
+      sample_type = as.character(sample_type)
     ) %>%
     distinct(sample, .keep_all = TRUE)
 
@@ -2522,8 +2413,7 @@ load_metadata <- function(metadata_tsv, sample_names) {
     transmute(
       sample = sample,
       group = dplyr::coalesce(group, group.default),
-      sample_type = dplyr::coalesce(sample_type, sample_type.default),
-      is_control = dplyr::coalesce(is_control, is_control.default)
+      sample_type = dplyr::coalesce(sample_type, sample_type.default)
     )
 
   meta
@@ -2582,10 +2472,6 @@ build_params <- function(args) {
     min_uniq_kmers_prevalence = 96,
     
     min_kmer_per_read_prevalence = 0.4,
-    
-    fp_falsepos_cutoff = as.numeric(
-      args$fp_falsepos_cutoff %||% 75
-    ),
     
     fp_true_cutoff = as.numeric(
       args$fp_true_cutoff %||% 1
@@ -2709,8 +2595,6 @@ analyze_sample_list <- function(sample_list, meta, prm, collapse_species_flag = 
   meta$sample <- as.character(meta$sample)
   meta$group <- as.character(meta$group)
   meta$sample_type <- as.character(meta$sample_type)
-  if (!("is_control" %in% colnames(meta))) meta$is_control <- FALSE
-  meta$is_control <- tolower(trimws(as.character(meta$is_control))) %in% c("true", "t", "1", "yes", "y")
 
   gs_long <- gs_long %>%
     left_join(meta, by = "sample")
@@ -2766,14 +2650,13 @@ analyze_sample_list <- function(sample_list, meta, prm, collapse_species_flag = 
         sp <- sp[is.finite(sp) & sp > 0]
         if (length(sp) == 0) NA_real_ else calc_shannon(sp / 1e6)
       },
-      n_true = sum(rank == tax_level_now & call == "Likely true", na.rm = TRUE),
-      n_uncertain = sum(rank == tax_level_now & call == "Uncertain", na.rm = TRUE),
-      n_contaminant = sum(rank == tax_level_now & call == "Likely false positive / background", na.rm = TRUE),
+      n_prioritized = sum(rank == tax_level_now & call == "Prioritized", na.rm = TRUE),
+      n_not_prioritized = sum(rank == tax_level_now & call == "Not prioritized", na.rm = TRUE),
       .groups = "drop"
     )
 
   cohort_summary <- cohort_summary %>%
-    select(-any_of(c("n_genus_qc", "n_species_qc", "shannon", "n_true", "n_uncertain", "n_contaminant"))) %>%
+    select(-any_of(c("n_genus_qc", "n_species_qc", "shannon", "n_prioritized", "n_not_prioritized"))) %>%
     left_join(qc_counts2, by = "sample")
 
   list(
@@ -3082,9 +2965,9 @@ save_heatmap_plot <- function(result, file_path, title_prefix = "") {
   gs <- result$gs_long %>%
     filter(rank == tax_level, call != "Non-microbial / Host", is.finite(rpmm))
 
-  focus <- gs %>% filter(call %in% c("Likely true"))
+  focus <- gs %>% filter(call %in% c("Prioritized"))
   if (nrow(focus) == 0) {
-    focus <- gs %>% filter(call != "Likely false positive / background")
+    focus <- gs %>% filter(call != "Not prioritized")
   }
 
   p <- if (nrow(focus) == 0) {
@@ -3192,7 +3075,7 @@ save_fp_by_call_plot <- function(result, file_path, title_suffix = "") {
 
 save_top_taxa_plot <- function(result, sample_name, file_path) {
   tax_level <- result$params$tax_level %||% "S"
-  sel_calls <- c("Likely true", "Uncertain")
+  sel_calls <- c("Prioritized", "Not prioritized")
 
   gs <- result$gs_long %>%
     filter(sample == sample_name, rank == tax_level, call %in% sel_calls, is.finite(rpmm))
@@ -3209,9 +3092,8 @@ save_top_taxa_plot <- function(result, sample_name, file_path) {
     topn <- gs %>%
       mutate(
         call_priority = dplyr::case_when(
-          call == "Likely true" ~ 1L,
-          call == "Uncertain" ~ 2L,
-          call == "Likely false positive / background" ~ 3L,
+          call == "Prioritized" ~ 1L,
+          call == "Not prioritized" ~ 2L,
           TRUE ~ 4L
         )
       ) %>%
@@ -3260,7 +3142,7 @@ save_fp_scatter_plot <- function(result, sample_name, file_path) {
 
 save_radar_plot <- function(result, sample_name, file_path, n_show = 5) {
   tax_level <- result$params$tax_level %||% "S"
-  sel_calls <- c("Likely true", "Uncertain")
+  sel_calls <- c("Prioritized", "Not prioritized")
   n_show <- max(3, min(10, as.integer(n_show)))
 
   png(file_path, width = 2200, height = 1800, res = 250)
@@ -3371,7 +3253,7 @@ save_all_plots <- function(result, out_dir, prefix = NULL) {
   }
 }
 
-write_cleaned_reports <- function(result, out_dir, quick = c("false", "unc"),
+write_cleaned_reports <- function(result, out_dir,
                                   protected_taxa_map = list(), keep_descendants = FALSE) {
   cleaned_dir <- file.path(out_dir, "cleaned_reports")
   dir.create(cleaned_dir, recursive = TRUE, showWarnings = FALSE)
@@ -3387,7 +3269,6 @@ write_cleaned_reports <- function(result, out_dir, quick = c("false", "unc"),
     cleaned <- build_cleaned_report_for_sample(
       raw_df = raw_df,
       gs = gs_samp,
-      quick = quick,
       protected_taxa = protected_taxa,
       keep_descendants = keep_descendants
     )
@@ -3463,13 +3344,11 @@ main <- function() {
   save_run_summary(result = result, out_dir = output_dir, args = args, label = "original")
 
   protected_taxa_map <- load_protected_taxa_map(args$protected_taxa_tsv %||% "")
-  quick_remove <- split_csv(args$quick_remove %||% "false,unc")
   keep_descendants <- parse_bool(args$keep_descendants, FALSE)
 
   cleaned_files <- write_cleaned_reports(
     result = result,
     out_dir = output_dir,
-    quick = quick_remove,
     protected_taxa_map = protected_taxa_map,
     keep_descendants = keep_descendants
   )

@@ -65,7 +65,7 @@ def bundled(path: str) -> Path | None:
 def validate_metadata(path: Path | None, report_names: set[str]) -> None:
     if path is None:
         return
-    required = {"sample", "group", "sample_type", "is_control"}
+    required = {"sample", "group", "sample_type"}
     with path.open("r", encoding="utf-8-sig", newline="") as handle:
         reader = csv.DictReader(handle, delimiter="\t")
         fields = set(reader.fieldnames or [])
@@ -128,9 +128,7 @@ def command_run(args: argparse.Namespace) -> int:
         "--collapse_species", bool_text(args.collapse_species),
         "--collapse_min_genus_reads", str(args.collapse_min_genus_reads),
         "--collapse_top_frac", str(args.collapse_top_frac),
-        "--fp_falsepos_cutoff", str(args.fp_falsepos_cutoff),
         "--fp_true_cutoff", str(args.fp_true_cutoff),
-        "--quick_remove", args.quick_remove,
         "--keep_descendants", bool_text(args.keep_descendants),
         "--show_fp_breakdown", bool_text(args.show_fp_breakdown),
         "--save_cleaned_reanalysis", bool_text(args.save_cleaned_reanalysis),
@@ -159,8 +157,8 @@ def command_init(args: argparse.Namespace) -> int:
     outdir.mkdir(parents=True, exist_ok=True)
     (outdir / "input_list.txt").write_text("sample1.kraken.report.txt\n", encoding="utf-8")
     (outdir / "metadata.tsv").write_text(
-        "sample\tgroup\tsample_type\tis_control\n"
-        "sample1.kraken.report.txt\tGroup 1\tClinical\tFALSE\n",
+        "sample\tgroup\tsample_type\n"
+        "sample1.kraken.report.txt\tGroup 1\tClinical\n",
         encoding="utf-8",
     )
     print(f"Wrote templates to: {outdir}")
@@ -208,13 +206,11 @@ def parser() -> argparse.ArgumentParser:
     add_bool(run, "--collapse-species", True)
     run.add_argument("--collapse-min-genus-reads", type=int, default=30)
     run.add_argument("--collapse-top-frac", type=float, default=0.85)
-    run.add_argument("--fp-falsepos-cutoff", type=float, default=75)
     run.add_argument("--fp-true-cutoff", type=float, default=1)
     run.add_argument("--ref-bg-tsv")
     run.add_argument("--kitome-blacklist-tsv")
     run.add_argument("--clinical-panel-tsv")
     run.add_argument("--protected-taxa-tsv")
-    run.add_argument("--quick-remove", default="false,unc")
     add_bool(run, "--keep-descendants", False)
     add_bool(run, "--show-fp-breakdown", False)
     add_bool(run, "--save-cleaned-reanalysis", True)

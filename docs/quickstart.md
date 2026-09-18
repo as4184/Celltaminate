@@ -23,11 +23,10 @@ bash examples/lung_nanopore/run_example.sh
 ```bash
 bin/celltaminate run \
   --reports sample1.kraken.report.txt sample2.kraken.report.txt \
-  --metadata metadata.tsv \
   --outdir celltaminate_results
 ```
 
-Metadata are optional. Without metadata, reports are assigned to a default group.
+Metadata are optional. Supply `--metadata metadata.tsv` when group or sample-type annotations are useful.
 
 ## 5. Launch the Shiny application
 
