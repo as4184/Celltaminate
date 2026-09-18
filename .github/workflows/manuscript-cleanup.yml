@@ -244,7 +244,11 @@ jobs:
                   t = t.replace('Celltaminate uses microbial abundance, cohort context, reference background, and other filters to summarize each sample in a way that is easier to interpret than a long Kraken report.', 'Celltaminate integrates quantitative sequence evidence, sterile-reference background, decontamination, and curated contextual evidence to summarize each sample in a way that is easier to interpret than a long Kraken report.')
                   t = t.replace('likely true organism', 'prioritized organism').replace('likely true range', 'prioritized range').replace('likely true microbe versus likely background', 'prioritized versus not-prioritized microbial signal')
 
-              # Remove a duplicate closing parenthesis left by the legacy call-block replacement.\n              t = t.replace('    )\\n    )\\n\\n  out\\n}', '    )\\n\\n  out\\n}')\n\n              t = re.sub(r'^.*fp_falsepos_cutoff.*\\n', '', t, flags=re.M)\n              for _ in range(8):
+              # Remove a duplicate closing parenthesis left by the legacy call-block replacement.
+              t = t.replace('    )\\n    )\\n\\n  out\\n}', '    )\\n\\n  out\\n}')
+
+              t = re.sub(r'^.*fp_falsepos_cutoff.*\\n', '', t, flags=re.M)
+              for _ in range(8):
                   t = re.sub(r',(\s*\n\s*\))', r'\1', t)
 
               path.write_text(t)
