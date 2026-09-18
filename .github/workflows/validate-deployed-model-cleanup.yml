@@ -1,0 +1,127 @@
+name: validate-deployed-model-cleanup
+
+on:
+  push:
+    branches: [ cleanup-current-model ]
+    paths:
+      - '.validate_deployed_model_cleanup'
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: cleanup-current-model
+          fetch-depth: 0
+
+      - name: Validate CLI and R syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile bin/celltaminate
+          python3 bin/celltaminate --help >/dev/null
+          python3 bin/celltaminate run --help >/dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq r-base-core >/dev/null
+          Rscript -e "parse(file='scripts/Celltaminate.R'); parse(file='app/Celltaminate_app.R')" >/dev/null
+          python3 bin/celltaminate run             --input-list examples/lung_nanopore/input_list.txt             --metadata examples/lung_nanopore/metadata.tsv             --outdir /tmp/celltaminate_validation             --dry-run >/dev/null
+
+      - name: Validate deployed model and obsolete-code removal
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          cli = Path("scripts/Celltaminate.R").read_text()
+          app = Path("app/Celltaminate_app.R").read_text()
+
+          forbidden = [
+              "low_biomass_context",
+              "reference_like_sample_composition",
+              "kitome_overlap_x_decon_support",
+              "species_nondominance_x_kmer_support",
+              "sample_priors",
+              "js_divergence",
+              "biomass_scaled",
+              "js_div",
+              "kmer_per_read_support",
+              "comp_genus",
+              "is_control",
+              "Likely true",
+              "Likely false",
+              "Uncertain",
+              "fp_falsepos_cutoff",
+          ]
+
+          for name, text in [("CLI", cli), ("App", app)]:
+              found = [x for x in forbidden if x in text]
+              if found:
+                  raise SystemExit(f"{name}: obsolete terms remain: {found}")
+
+              m = re.search(
+                  r'final_score_model <- function\(\) \{\s*feature_names <- c\((.*?)\)\s*\n\s*list\(',
+                  text,
+                  flags=re.S,
+              )
+              if not m:
+                  raise SystemExit(f"{name}: final_score_model feature list not found")
+              features = re.findall(r'"([^"]+)"', m.group(1))
+              if len(features) != 18:
+                  raise SystemExit(f"{name}: expected 18 deployed terms, found {len(features)}: {features}")
+
+              for required in [
+                  "reads_support",
+                  "rpmm_support",
+                  "uniq_kmer_support",
+                  "ambiguity_species_nondominance",
+                  "reference_prevalence",
+                  "reference_median_abundance",
+                  "reference_relative_abundance",
+                  "reference_at_or_below_q99",
+                  "reference_at_or_below_q95",
+                  "reference_at_or_below_q50",
+                  "decontaminated_abundance",
+                  "decontamination_ratio",
+                  "kitome_clinical_overlap",
+                  "clinical_membership",
+                  "clinical_x_decon_support",
+                  "kitome_only_x_decon_support",
+                  "reference_prevalence_x_low_enrichment",
+                  "unresolved_ambiguity_x_kmer_support",
+              ]:
+                  if required not in features:
+                      raise SystemExit(f"{name}: missing deployed feature {required}")
+
+              if 'fp_true_flag ~ "Prioritized"' not in text:
+                  raise SystemExit(f"{name}: prioritized binary call missing")
+              if 'TRUE ~ "Not prioritized"' not in text:
+                  raise SystemExit(f"{name}: not-prioritized binary call missing")
+
+          def model_block(text):
+              a = text.index("final_score_model <- function()")
+              b = text.index("compute_ambiguity_index <- function(", a)
+              return text[a:b].strip()
+
+          if model_block(cli) != model_block(app):
+              raise SystemExit("CLI and App deployed-model definitions differ")
+
+          print("Validated 18-term deployed model and binary call logic in CLI and App.")
+          PY
+
+      - name: Remove validation artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/validate-deployed-model-cleanup.yml
+          rm -f .validate_deployed_model_cleanup
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Validate manuscript-aligned deployed model cleanup'
+          git push origin HEAD:cleanup-current-model
