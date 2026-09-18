@@ -761,13 +761,13 @@ REF_CELL_LINES_PATH <- "refined_cell.lines.tsv"
 
 load_ref_cell_lines <- function(path = REF_CELL_LINES_PATH, eps = 1e-9) {
   if (!file.exists(path)) {
-    return(list(available = FALSE, path = path, ref = NULL, stats = NULL, comp_genus = NULL))
+    return(list(available = FALSE, path = path, ref = NULL, stats = NULL))
   }
 
   ref <- tryCatch(read.delim(path, header = TRUE, stringsAsFactors = FALSE, check.names = FALSE), error = function(e) NULL)
 
   if (is.null(ref) || nrow(ref) == 0) {
-    return(list(available = FALSE, path = path, ref = NULL, stats = NULL, comp_genus = NULL))
+    return(list(available = FALSE, path = path, ref = NULL, stats = NULL))
   }
 
   if (!"name" %in% colnames(ref)) {
@@ -785,7 +785,7 @@ load_ref_cell_lines <- function(path = REF_CELL_LINES_PATH, eps = 1e-9) {
   }
 
   if (!all(c("rank", "name", "rpmm") %in% colnames(ref))) {
-    return(list(available = FALSE, path = path, ref = NULL, stats = NULL, comp_genus = NULL))
+    return(list(available = FALSE, path = path, ref = NULL, stats = NULL))
   }
 
   ref <- ref %>%
@@ -806,7 +806,7 @@ load_ref_cell_lines <- function(path = REF_CELL_LINES_PATH, eps = 1e-9) {
   if (!is.finite(n_ref_samples) || n_ref_samples <= 0) n_ref_samples <- NA_real_
 
   if (nrow(ref) == 0) {
-    return(list(available = FALSE, path = path, ref = NULL, stats = NULL, comp_genus = NULL))
+    return(list(available = FALSE, path = path, ref = NULL, stats = NULL))
   }
 
   stats <- ref %>%
@@ -826,47 +826,16 @@ load_ref_cell_lines <- function(path = REF_CELL_LINES_PATH, eps = 1e-9) {
       .groups = "drop"
     )
 
-  comp_genus <- ref %>%
-    filter(rank == "G", is.finite(rpmm), rpmm > 0) %>%
-    group_by(name_clean) %>%
-    summarise(ref_med = median(rpmm, na.rm = TRUE), .groups = "drop") %>%
-    mutate(ref_med = coalesce0(ref_med)) %>%
-    arrange(desc(ref_med))
-
-  tot <- sum(comp_genus$ref_med, na.rm = TRUE)
-  comp_genus <- comp_genus %>%
-    mutate(ref_p = ifelse(is.finite(tot) & tot > 0, ref_med / tot, NA_real_))
-
-  list(available = TRUE, path = path, ref = ref, stats = stats, comp_genus = comp_genus)
+  list(available = TRUE, path = path, ref = ref, stats = stats)
 }
 
-REF_BG <- list(available = FALSE, path = REF_CELL_LINES_PATH, ref = NULL, stats = NULL, comp_genus = NULL)
-
-js_divergence <- function(p, q, eps = 1e-12) {
-  p <- as.numeric(p)
-  q <- as.numeric(q)
-  p[!is.finite(p)] <- 0
-  q[!is.finite(q)] <- 0
-  p <- p / sum(p + eps)
-  q <- q / sum(q + eps)
-  m <- 0.5 * (p + q)
-
-  kl <- function(a, b) {
-    a <- a + eps
-    b <- b + eps
-    sum(a * log2(a / b))
-  }
-
-  0.5 * kl(p, m) + 0.5 * kl(q, m)
-}
+REF_BG <- list(available = FALSE, path = REF_CELL_LINES_PATH, ref = NULL, stats = NULL)
 
 final_score_model <- function() {
   feature_names <- c(
     "reads_support",
     "rpmm_support",
     "uniq_kmer_support",
-    "kmer_per_read_support",
-    "ambiguity_unresolved_fraction",
     "ambiguity_species_nondominance",
     "reference_prevalence",
     "reference_median_abundance",
@@ -876,17 +845,12 @@ final_score_model <- function() {
     "reference_at_or_below_q50",
     "decontaminated_abundance",
     "decontamination_ratio",
-    "kitome_only",
     "kitome_clinical_overlap",
     "clinical_membership",
-    "low_biomass_context",
-    "reference_like_sample_composition",
     "clinical_x_decon_support",
     "kitome_only_x_decon_support",
-    "kitome_overlap_x_decon_support",
     "reference_prevalence_x_low_enrichment",
-    "unresolved_ambiguity_x_kmer_support",
-    "species_nondominance_x_kmer_support"
+    "unresolved_ambiguity_x_kmer_support"
   )
   
   list(
@@ -901,8 +865,6 @@ final_score_model <- function() {
         -4.037345601140845,
         -5.560973858316463,
         -6.791598579642281,
-        -2.868097637369349,
-        0.13617358617707387,
         0.3418085172884586,
         0.5147502612680851,
         3.9850698122986192,
@@ -912,17 +874,12 @@ final_score_model <- function() {
         0.16708213885080395,
         -4.451715457237202,
         -0.5715219157760044,
-        0.1524074074074074,
         0.057901234567901236,
         -0.1365432098765432,
-        0.0,
-        -0.8760988289857169,
         -0.6162082363065745,
         -0.6411394789276108,
-        -0.21839854637573825,
         0.09053060438834876,
-        -0.8806494090358415,
-        -2.1563274408371043
+        -0.8806494090358415
       ),
       feature_names
     ),
@@ -932,8 +889,6 @@ final_score_model <- function() {
         -4.037345601140845,
         -5.560973858316463,
         -6.791598579642281,
-        -2.868097637369349,
-        0.13617358617707384,
         0.3418085172884586,
         0.5147502612680849,
         3.9850698122986192,
@@ -943,17 +898,12 @@ final_score_model <- function() {
         0.16708213885080392,
         -4.451715457237202,
         -0.5715219157760044,
-        0.1524074074074074,
         0.057901234567901236,
         -0.1365432098765432,
-        0.0,
-        -0.8760988289857169,
         -0.6162082363065745,
         -0.6411394789276108,
-        -0.21839854637573825,
         0.09053060438834876,
-        -0.8806494090358415,
-        -2.1563274408371043
+        -0.8806494090358415
       ),
       feature_names
     ),
@@ -963,8 +913,6 @@ final_score_model <- function() {
         1.5128497297793833,
         2.150800601166756,
         1.5801497288378767,
-        0.7665211438955583,
-        0.16611865990321514,
         0.283347787544235,
         0.2586009543782396,
         1.4482795250848732,
@@ -974,17 +922,12 @@ final_score_model <- function() {
         0.37127182030409095,
         2.974864934519208,
         0.3576872461912685,
-        0.3594153441003318,
         0.2335565918646145,
         0.3433644735745873,
-        1.0,
-        0.037336150006150516,
         2.1033078430172503,
         1.9433149640003147,
-        1.3129930478842984,
         0.37318236981981967,
-        1.1019121244936676,
-        1.7770162314781006
+        1.1019121244936676
       ),
       feature_names
     ),
@@ -994,8 +937,6 @@ final_score_model <- function() {
         0.25588616843532014,
         0.015857076698091055,
         0.23738110321065942,
-        0.0,
-        0.0,
         0.13855067199962626,
         0.011924245703707377,
         0.1542911530541554,
@@ -1005,146 +946,16 @@ final_score_model <- function() {
         0.04072473708446774,
         0.0684245954292958,
         0.11686135228472111,
-        0.0,
         0.027464346253092846,
         0.207776863730765,
-        0.0,
-        0.0,
         0.2429811424456025,
         0.1631094360713755,
-        0.0,
         0.07293897105982951,
-        0.13037149291281877,
-        0.0
+        0.13037149291281877
       ),
       feature_names
     )
   )
-}
-
-compute_sample_priors <- function(gs_long, meta_df, params, ref_comp_genus = NULL) {
-  df0 <- gs_long %>%
-    distinct(sample, total_reads, microbial_reads) %>%
-    mutate(
-      log_microbial_reads = safe_log10(microbial_reads + 1),
-      biomass_scaled = scale01(log_microbial_reads)
-    )
-  
-  js_df <- df0 %>%
-    mutate(
-      js_div = NA_real_
-    )
-  
-  if (!is.null(ref_comp_genus) && nrow(ref_comp_genus) > 0) {
-    ref_vec <- ref_comp_genus %>%
-      filter(is.finite(ref_p), ref_p > 0) %>%
-      select(
-        genus = name_clean,
-        ref_p
-      )
-    
-    samp_genus <- gs_long %>%
-      filter(
-        rank == "G",
-        is_microbial,
-        !is_host,
-        !is_plant,
-        is.finite(rpmm),
-        rpmm > 0
-      ) %>%
-      group_by(
-        sample,
-        genus = name_clean
-      ) %>%
-      summarise(
-        rpmm = sum(rpmm, na.rm = TRUE),
-        .groups = "drop"
-      )
-    
-    if (nrow(samp_genus) > 0) {
-      js_calc <- samp_genus %>%
-        group_by(sample) %>%
-        group_modify(
-          ~{
-            d <- .x
-            
-            p <- d$rpmm
-            p[!is.finite(p)] <- 0
-            names(p) <- d$genus
-            
-            if (sum(p) <= 0) {
-              return(
-                tibble(
-                  js_div = NA_real_
-                )
-              )
-            }
-            
-            p <- p / sum(p)
-            
-            all_g <- union(
-              names(p),
-              ref_vec$genus
-            )
-            
-            p2 <- rep(
-              0,
-              length(all_g)
-            )
-            names(p2) <- all_g
-            
-            q2 <- rep(
-              0,
-              length(all_g)
-            )
-            names(q2) <- all_g
-            
-            p2[names(p)] <- p
-            q2[ref_vec$genus] <- ref_vec$ref_p
-            
-            qsum <- sum(q2)
-            
-            if (!is.finite(qsum) || qsum <= 0) {
-              return(
-                tibble(
-                  js_div = NA_real_
-                )
-              )
-            }
-            
-            q2 <- q2 / qsum
-            
-            tibble(
-              js_div = js_divergence(
-                p2,
-                q2
-              )
-            )
-          }
-        ) %>%
-        ungroup()
-      
-      js_df <- df0 %>%
-        left_join(
-          js_calc,
-          by = "sample"
-        )
-    }
-  }
-  
-  js_df %>%
-    mutate(
-      js_div = if_else(
-        is.finite(js_div),
-        js_div,
-        NA_real_
-      )
-    ) %>%
-    select(
-      sample,
-      biomass_scaled,
-      js_div
-    )
 }
 
 compute_ambiguity_index <- function(gs_long) {
@@ -1439,12 +1250,9 @@ compute_taxon_features <- function(gs_long, meta_df, params, user_contam = chara
   tax_base <- tax_base %>%
     mutate(bg_rpmm = pmax(coalesce0(ref_med_rpmm), coalesce0(cohort_bg_rpmm)))
 
-  sample_priors <- compute_sample_priors(gs_long, meta_df, params, ref_comp_genus = REF_BG$comp_genus)
-
   list(
     tax_features = tax_base,
-    gs_long = gs_long,
-    sample_priors = sample_priors
+    gs_long = gs_long
   )
 }
 
@@ -1482,10 +1290,6 @@ compute_final_score_features <- function(out) {
   
   log_uniq <- log1p_nonnegative_score(
     out$uniq_kmers
-  )
-  
-  log_kpr <- log1p_nonnegative_score(
-    out$kmer_per_read
   )
   
   log_decon <- log1p_nonnegative_score(
@@ -1581,26 +1385,6 @@ compute_final_score_features <- function(out) {
     NA_real_
   )
   
-  biomass_scaled <- ifelse(
-    is.finite(out$biomass_scaled),
-    cap(
-      out$biomass_scaled,
-      0,
-      1
-    ),
-    NA_real_
-  )
-  
-  js_div <- ifelse(
-    is.finite(out$js_div),
-    cap(
-      out$js_div,
-      0,
-      1
-    ),
-    NA_real_
-  )
-  
   in_clinical <-
     !is.na(out$in_clinical_panel) &
     out$in_clinical_panel
@@ -1644,12 +1428,6 @@ compute_final_score_features <- function(out) {
     uniq_kmer_support =
       -log_uniq,
     
-    kmer_per_read_support =
-      -log_kpr,
-    
-    ambiguity_unresolved_fraction =
-      ambiguity_unresolved_fraction,
-    
     ambiguity_species_nondominance =
       ambiguity_species_nondominance,
     
@@ -1677,20 +1455,11 @@ compute_final_score_features <- function(out) {
     decontamination_ratio =
       -decontamination_ratio_raw,
     
-    kitome_only =
-      kitome_only,
-    
     kitome_clinical_overlap =
       kitome_clinical_overlap,
     
     clinical_membership =
       -clinical,
-    
-    low_biomass_context =
-      -biomass_scaled,
-    
-    reference_like_sample_composition =
-      -js_div,
     
     clinical_x_decon_support =
       -clinical *
@@ -1700,20 +1469,12 @@ compute_final_score_features <- function(out) {
       -kitome_only *
       log_decon,
     
-    kitome_overlap_x_decon_support =
-      -kitome_clinical_overlap *
-      log_decon,
-    
     reference_prevalence_x_low_enrichment =
       reference_prevalence *
       low_enrichment,
     
     unresolved_ambiguity_x_kmer_support =
       -ambiguity_unresolved_fraction *
-      log_uniq,
-    
-    species_nondominance_x_kmer_support =
-      -ambiguity_species_nondominance *
       log_uniq
   )
 }
@@ -1817,7 +1578,7 @@ compute_final_score <- function(out) {
   )
 }
 
-apply_calls <- function(gs_long, tax_features, meta_df, params, sample_priors) {
+apply_calls <- function(gs_long, tax_features, meta_df, params) {
   meta2 <- meta_df %>%
     mutate(group = if_else(is.na(group) | !nzchar(group), "Group 1", group))
 
@@ -1848,8 +1609,7 @@ apply_calls <- function(gs_long, tax_features, meta_df, params, sample_priors) {
 
   out <- gs_long %>%
     left_join(tf_keep, by = c("rank", "name_clean")) %>%
-    left_join(group_sizes, by = "group") %>%
-    left_join(sample_priors %>% select(sample, biomass_scaled, js_div), by = "sample")
+    left_join(group_sizes, by = "group")
 
   out <- out %>%
     mutate(
@@ -2485,7 +2245,7 @@ init_reference_tables <- function(args) {
   REF_BG <<- if (!is.null(args$ref_bg_tsv) && nzchar(args$ref_bg_tsv)) {
     load_ref_cell_lines(path = args$ref_bg_tsv, eps = 1e-9)
   } else {
-    list(available = FALSE, path = NULL, ref = NULL, stats = NULL, comp_genus = NULL)
+    list(available = FALSE, path = NULL, ref = NULL, stats = NULL)
   }
 
   KITOME_BG_BLACKLIST <<- if (!is.null(args$kitome_blacklist_tsv) && nzchar(args$kitome_blacklist_tsv)) {
@@ -2618,9 +2378,7 @@ analyze_sample_list <- function(sample_list, meta, prm, collapse_species_flag = 
 
   tax_features <- engine$tax_features
   gs_long <- engine$gs_long
-  sample_priors <- engine$sample_priors
-
-  gs_long <- apply_calls(gs_long, tax_features, meta, prm, sample_priors)
+  gs_long <- apply_calls(gs_long, tax_features, meta, prm)
 
   n_cohort_samples <- dplyr::n_distinct(meta$sample)
   prevalence_display <- gs_long %>%
@@ -2663,8 +2421,7 @@ analyze_sample_list <- function(sample_list, meta, prm, collapse_species_flag = 
     cohort_summary = cohort_summary,
     meta = meta,
     gs_long = gs_long,
-    tax_features = tax_features,
-    sample_priors = sample_priors
+    tax_features = tax_features
   )
 }
 
@@ -2830,9 +2587,6 @@ save_tables <- function(result, out_dir, show_fp_breakdown = FALSE) {
   write.table(result$tax_features,
               file = file.path(tables_dir, "tax_features.tsv"),
               sep = "\t", quote = FALSE, row.names = FALSE)
-  write.table(result$sample_priors,
-              file = file.path(tables_dir, "sample_priors.tsv"),
-              sep = "\t", quote = FALSE, row.names = FALSE)
 
   prev_df <- make_prevalence_abundance_df(
     result$gs_long,
@@ -2868,7 +2622,6 @@ save_tables <- function(result, out_dir, show_fp_breakdown = FALSE) {
       cohort_summary = result$cohort_summary,
       sample_metadata = result$meta,
       tax_features = result$tax_features,
-      sample_priors = result$sample_priors,
       prevalence_abundance = prev_df
     ),
     path = workbook_path
