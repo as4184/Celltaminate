@@ -96,7 +96,7 @@ jobs:
               )
               t = sub1(
                   t,
-                  r'call = case_when\(\n\s*!is_microbial \| is_host \| is_plant ~ "Non-microbial / Host",\n\s*fp_true_flag ~ "Likely true",\n\s*fp_falsepos_flag ~ "Likely false positive / background",\n\s*TRUE ~ "Uncertain"\n\s*\),\n\s*call_reason = case_when\(.*?\n\s*\)\n\s*\)',
+                  r'call = case_when\(\n\s*!is_microbial \| is_host \| is_plant ~ "Non-microbial / Host",\n\s*fp_true_flag ~ "Likely true",\n\s*fp_falsepos_flag ~ "Likely false positive / background",\n\s*TRUE ~ "Uncertain"\n\s*\),\n\s*call_reason = case_when\(.*?\n\s*\)\n\s*\)\n\s*\)',
                   '''call = case_when(\n        !is_microbial | is_host | is_plant ~ "Non-microbial / Host",\n        fp_true_flag ~ "Prioritized",\n        TRUE ~ "Not prioritized"\n      ),\n      call_reason = case_when(\n        !is_microbial | is_host | is_plant ~ "Excluded as non-microbial or host",\n        call == "Prioritized" ~ paste0(\n          "Score ", round(fp_score, 1),\n          " <= prioritization cutoff ", round(params$fp_true_cutoff, 1)\n        ),\n        TRUE ~ paste0(\n          "Score ", round(fp_score, 1),\n          " > prioritization cutoff ", round(params$fp_true_cutoff, 1)\n        )\n      )\n    )''',
                   re.S,
                   'binary call assignment'
