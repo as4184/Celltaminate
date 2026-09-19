@@ -20,7 +20,7 @@ Download it to the default location with:
 bin/celltaminate download-reference
 ```
 
-or provide a customized control dataset at run time:
+or provide a custom reference background dataset at run time:
 
 ```bash
 bin/celltaminate run \
