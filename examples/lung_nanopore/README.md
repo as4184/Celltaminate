@@ -1,6 +1,6 @@
 # Lung Nanopore example
 
-This directory contains one Kraken-style report and matching metadata for a minimal Celltaminate run.
+This directory contains one Kraken-style report and matching metadata for a demo run of Celltaminate.
 
 From the repository root:
 
