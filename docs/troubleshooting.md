@@ -1,28 +1,32 @@
 # Troubleshooting
 
-## Metadata rows are ignored
+## The reference background is not found
 
-The `sample` column must match the report basename exactly. If your report path is:
-
-```text
-/data/project/S6.kraken.report.txt
-```
-
-the metadata sample value should be:
-
-```text
-S6.kraken.report.txt
-```
-## Scores look too permissive or too strict
-
-Adjust the score thresholds or scoring strictness:
+Download it to the default location:
 
 ```bash
---fp-true-cutoff 5     --fp-falsepos-cutoff 75     --fp-aggressiveness 1.15
+bin/celltaminate download-reference
 ```
 
-Higher aggressiveness makes the score more willing to classify background-like taxa as likely false positives/background.
+or provide `--ref-bg-tsv /path/to/refined_cell.lines.tsv`.
 
-## Kraken report format error
+## Metadata sample names do not match
 
-Confirm that your input is a Kraken report, not a Kraken output file. Celltaminate expects summary report rows with percentage, clade reads, direct reads, rank, taxid, and taxon name.
+The `sample` column in `metadata.tsv` must match the basename of the corresponding Kraken report exactly.
+
+## Unique k-mer information is missing
+
+Kraken2 6-column reports can be processed, but 8-column Kraken2 reports with minimizer data or KrakenUniq reports are preferred because unique k-mer/minimizer support is used by the fitted model.
+
+## The Shiny application cannot find the curated panels
+
+Launch the application through `bin/celltaminate app`. The launcher and application automatically resolve the required files from the repository.
+
+## R packages are missing
+
+Create the supplied conda environment again:
+
+```bash
+conda env create -f environment.yml
+conda activate celltaminate
+```

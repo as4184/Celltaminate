@@ -1,21 +1,11 @@
-# Shiny app
+# Shiny application
 
-The Shiny app provides a point-and-click interface for users who do not want to run command-line analysis directly.
-
-Launch it with:
+Launch the application with:
 
 ```bash
 bin/celltaminate app
 ```
 
-The app allows users to:
+The application allows users to interactively run Celltaminate, adjust the prioritization threshold, and inspect results. This is useful for teams that have multidisciplinary personnel such as physicians, clinical researchers, wet lab scientists, etc.
 
-- upload one or more Kraken2 or KrakenUniq reports;
-- choose genus-level or species-level scoring;
-- adjust score thresholds and scoring strictness;
-- view cohort-level and sample-level summaries;
-- inspect interactive taxon tables;
-- review abundance plots and score distributions;
-- select taxa for contextual summaries with taxonomy and curated remarks when available.
-
-For deployment, the app can be run on a local workstation, Shiny Server, Posit Connect, or a containerized environment.
+The kitome and clinical-pathogen panels are loaded automatically in Celltaminate. The reference background table is loaded automatically when `data/reference/refined_cell.lines.tsv` is present.

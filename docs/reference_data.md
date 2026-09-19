@@ -1,33 +1,30 @@
 # Reference data
 
-Celltaminate can use a reference background table built from sterile human cell-line microbial profiles. The expected columns are:
+Celltaminate uses a reference background dataset derived from sterile human cell-line sequencing experiments that contains 1,040 unique sample identifiers. This dataset is the same that we used in SAHMI (https://github.com/sjdlabgroup/SAHMI)
+
+Format of the reference dataset file:
 
 ```text
 sample	rank	taxid	name	reads	min	uniq	rpm	rpmm
 ```
 
-## Full reference table
-
-The full `refined_cell.lines.tsv` reference background table is available from Zenodo:
+The full `refined_cell.lines.tsv` table is distributed through Zenodo:
 
 ```text
 DOI: 10.5281/zenodo.20560460
 ```
 
-Download it before running an analysis:
+Download it to the default location with:
 
 ```bash
-bin/celltaminate download-reference --out data/reference/refined_cell.lines.tsv
+bin/celltaminate download-reference
 ```
 
-If the helper cannot resolve the file URL, download `refined_cell.lines.tsv` manually from the Zenodo DOI landing page and place it at `data/reference/refined_cell.lines.tsv`.
-
-Then pass the file like this:
+or provide a custom reference background dataset at run time:
 
 ```bash
 bin/celltaminate run \
   --input-list input_list.txt \
-  --metadata metadata.tsv \
   --outdir results \
-  --ref-bg-tsv data/reference/refined_cell.lines.tsv
+  --ref-bg-tsv /path/to/refined_cell.lines.tsv
 ```

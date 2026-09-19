@@ -12,7 +12,7 @@
 #
 # Optional arguments:
 #   --metadata_tsv               Metadata table with columns:
-#                                sample, group, sample_type, is_control
+#                                sample, group, sample_type
 #   --input_list                 Text file with one report path per line
 #   --tax_level                  G or S [default: S]
 #   --host_species               Comma-separated: human,mouse,drosophila [default: human]
@@ -21,20 +21,17 @@
 #   --collapse_species           TRUE/FALSE [default: TRUE]
 #   --collapse_min_genus_reads   Integer [default: 30]
 #   --collapse_top_frac          Numeric [default: 0.85]
-#   --fp_falsepos_cutoff         Numeric [default: 75]
-#   --fp_true_cutoff             Numeric [default: 5]
-#   --fp_aggressiveness          Numeric [default: 1.15]
+#   --fp_true_cutoff             Numeric [default: 1]
 #   --ref_bg_tsv                 Reference background TSV
 #   --kitome_blacklist_tsv       Kitome/background blacklist TSV
 #   --clinical_panel_tsv         Clinically important pathogens TSV
-#   --quick_remove               Comma-separated: false,unc,true [default: false,unc]
 #   --protected_taxa_tsv         Optional TSV with columns sample and taxon
 #   --keep_descendants           TRUE/FALSE [default: FALSE]
 #   --show_fp_breakdown          TRUE/FALSE [default: FALSE]
 #   --save_cleaned_reanalysis    TRUE/FALSE [default: TRUE]
 #
 # Example:
-# Rscript celltaminate_cli.R \
+# Rscript celltaminate.R \
 #   --input_files sample1.txt,sample2.txt \
 #   --metadata_tsv metadata.tsv \
 #   --output_dir results \
@@ -118,22 +115,19 @@ ui_default <- function(defaults, name, fallback) {
 
 call_bucket_label <- function(call) {
   dplyr::case_when(
-    call == "Likely true" ~ "Likely true",
-    call == "Likely false positive / background" ~ "Likely false positive/background",
-    TRUE ~ "Uncertain"
+    call == "Prioritized" ~ "Prioritized",
+    TRUE ~ "Not prioritized"
   )
 }
 
 CALL_BUCKET_LEVELS <- c(
-  "Likely true",
-  "Uncertain",
-  "Likely false positive/background"
+  "Prioritized",
+  "Not prioritized"
 )
 
 CALL_PALETTE <- c(
-  "Likely false positive/background" = "#8B0000",
-  "Uncertain" = "#FF9800",
-  "Likely true" = "#2E7D32"
+  "Prioritized" = "#2E7D32",
+  "Not prioritized" = "#8B0000"
 )
 
 make_prevalence_abundance_df <- function(gs_long, tax_level = "S", total_samples = NULL) {
@@ -186,7 +180,7 @@ make_prevalence_abundance_df <- function(gs_long, tax_level = "S", total_samples
   prev_df %>%
     left_join(bucket_df, by = "name_clean") %>%
     mutate(
-      call_bucket = dplyr::coalesce(call_bucket, "Uncertain"),
+      call_bucket = dplyr::coalesce(call_bucket, "Not prioritized"),
       prevalence = cap(prevalence, 0, 1)
     )
 }
@@ -195,7 +189,7 @@ get_bioai_taxa_info <- function(gs, tax_level = "S") {
   if (is.null(gs) || nrow(gs) == 0) {
     return(list(
       candidates = character(0),
-      true_taxa = character(0),
+      prioritized_taxa = character(0),
       initial_selected = character(0),
       initial_choices = character(0)
     ))
@@ -205,10 +199,8 @@ get_bioai_taxa_info <- function(gs, tax_level = "S") {
     filter(rank == tax_level, call != "Non-microbial / Host", is.finite(rpmm), nzchar(name_clean)) %>%
     mutate(
       call_priority = dplyr::case_when(
-        call == "Likely true" ~ 1,
-        call == "Uncertain" ~ 2,
-        call == "Likely false positive / background" ~ 3,
-        TRUE ~ 4
+        call == "Prioritized" ~ 1,
+        TRUE ~ 2
       )
     )
 
@@ -217,18 +209,18 @@ get_bioai_taxa_info <- function(gs, tax_level = "S") {
     pull(name_clean) %>%
     unique()
 
-  true_taxa <- base %>%
-    filter(call == "Likely true") %>%
+  prioritized_taxa <- base %>%
+    filter(call == "Prioritized") %>%
     arrange(desc(rpmm)) %>%
     pull(name_clean) %>%
     unique()
 
-  initial_selected <- if (length(true_taxa) > 0) true_taxa else head(candidates, 3)
+  initial_selected <- if (length(prioritized_taxa) > 0) prioritized_taxa else head(candidates, 3)
   initial_choices <- unique(c(initial_selected, head(candidates, 100)))
 
   list(
     candidates = as.character(candidates),
-    true_taxa = as.character(true_taxa),
+    prioritized_taxa = as.character(prioritized_taxa),
     initial_selected = as.character(initial_selected),
     initial_choices = as.character(initial_choices)
   )
@@ -769,13 +761,13 @@ REF_CELL_LINES_PATH <- "refined_cell.lines.tsv"
 
 load_ref_cell_lines <- function(path = REF_CELL_LINES_PATH, eps = 1e-9) {
   if (!file.exists(path)) {
-    return(list(available = FALSE, path = path, ref = NULL, stats = NULL, comp_genus = NULL))
+    return(list(available = FALSE, path = path, ref = NULL, stats = NULL))
   }
 
   ref <- tryCatch(read.delim(path, header = TRUE, stringsAsFactors = FALSE, check.names = FALSE), error = function(e) NULL)
 
   if (is.null(ref) || nrow(ref) == 0) {
-    return(list(available = FALSE, path = path, ref = NULL, stats = NULL, comp_genus = NULL))
+    return(list(available = FALSE, path = path, ref = NULL, stats = NULL))
   }
 
   if (!"name" %in% colnames(ref)) {
@@ -793,7 +785,7 @@ load_ref_cell_lines <- function(path = REF_CELL_LINES_PATH, eps = 1e-9) {
   }
 
   if (!all(c("rank", "name", "rpmm") %in% colnames(ref))) {
-    return(list(available = FALSE, path = path, ref = NULL, stats = NULL, comp_genus = NULL))
+    return(list(available = FALSE, path = path, ref = NULL, stats = NULL))
   }
 
   ref <- ref %>%
@@ -814,7 +806,7 @@ load_ref_cell_lines <- function(path = REF_CELL_LINES_PATH, eps = 1e-9) {
   if (!is.finite(n_ref_samples) || n_ref_samples <= 0) n_ref_samples <- NA_real_
 
   if (nrow(ref) == 0) {
-    return(list(available = FALSE, path = path, ref = NULL, stats = NULL, comp_genus = NULL))
+    return(list(available = FALSE, path = path, ref = NULL, stats = NULL))
   }
 
   stats <- ref %>%
@@ -834,221 +826,279 @@ load_ref_cell_lines <- function(path = REF_CELL_LINES_PATH, eps = 1e-9) {
       .groups = "drop"
     )
 
-  comp_genus <- ref %>%
-    filter(rank == "G", is.finite(rpmm), rpmm > 0) %>%
-    group_by(name_clean) %>%
-    summarise(ref_med = median(rpmm, na.rm = TRUE), .groups = "drop") %>%
-    mutate(ref_med = coalesce0(ref_med)) %>%
-    arrange(desc(ref_med))
-
-  tot <- sum(comp_genus$ref_med, na.rm = TRUE)
-  comp_genus <- comp_genus %>%
-    mutate(ref_p = ifelse(is.finite(tot) & tot > 0, ref_med / tot, NA_real_))
-
-  list(available = TRUE, path = path, ref = ref, stats = stats, comp_genus = comp_genus)
+  list(available = TRUE, path = path, ref = ref, stats = stats)
 }
 
-REF_BG <- list(available = FALSE, path = REF_CELL_LINES_PATH, ref = NULL, stats = NULL, comp_genus = NULL)
+REF_BG <- list(available = FALSE, path = REF_CELL_LINES_PATH, ref = NULL, stats = NULL)
 
-js_divergence <- function(p, q, eps = 1e-12) {
-  p <- as.numeric(p)
-  q <- as.numeric(q)
-  p[!is.finite(p)] <- 0
-  q[!is.finite(q)] <- 0
-  p <- p / sum(p + eps)
-  q <- q / sum(q + eps)
-  m <- 0.5 * (p + q)
-
-  kl <- function(a, b) {
-    a <- a + eps
-    b <- b + eps
-    sum(a * log2(a / b))
-  }
-
-  0.5 * kl(p, m) + 0.5 * kl(q, m)
-}
-
-ref_fp_component <- function(obs_log, q50, q95, q99, n, min_n = 10) {
-  out <- rep(0.5, length(obs_log))
-  ok <- is.finite(obs_log) & is.finite(q50) & is.finite(q95) & is.finite(q99) & is.finite(n) & n >= min_n
-  if (!any(ok)) return(out)
-
-  o <- obs_log[ok]
-  a <- q50[ok]
-  b <- q95[ok]
-  c <- q99[ok]
-  val <- rep(0.5, length(o))
-
-  val[o <= a] <- 0.85
-
-  mid1 <- (o > a) & (o <= b) & (b > a)
-  val[mid1] <- 0.85 - (0.85 - 0.35) * ((o[mid1] - a[mid1]) / (b[mid1] - a[mid1]))
-
-  mid2 <- (o > b) & (o <= c) & (c > b)
-  val[mid2] <- 0.35 - (0.35 - 0.15) * ((o[mid2] - b[mid2]) / (c[mid2] - b[mid2]))
-
-  val[o > c] <- 0.05
-  out[ok] <- pmin(pmax(val, 0), 1)
-  out
-}
-
-fp_low_by_mid <- function(x, mid, slope = 0.8) {
-  x <- suppressWarnings(as.numeric(x))
-  x[!is.finite(x)] <- 0
-  x <- pmax(x, 0)
-  plogis((log1p(mid) - log1p(x)) / slope)
-}
-
-fp_low_linear <- function(x, mid, slope = 0.2) {
-  x <- suppressWarnings(as.numeric(x))
-  x[!is.finite(x)] <- NA_real_
-  out <- rep(0.5, length(x))
-  ok <- is.finite(x)
-  out[ok] <- plogis((mid - x[ok]) / slope)
-  out
-}
-
-fp_weights <- function(mode) {
-  list(
-    base_prior = 0.8,
-    w_low_reads = 1.0,
-    w_low_rpmm = 0.95,
-    w_low_kmer = 1.2,
-    w_ref_bg = 1.0,
-    w_ref_prev = 0.9,
-    w_fc_ref = 1.0,
-    w_ctrl_enrich = 1.3,
-    w_ctrl_prev = 0.9,
-    w_cohort_prev = 1.5,
-    w_common_bg = 1.5,
-    w_ubiq = 1.0,
-    w_biomass = 0.8,
-    w_nonmicrobe_corr = 0.6,
-    w_decon = 0.9,
-    w_decon_ratio = 1.4,
-    w_ambig = 0.8,
-    w_kitome = 3.0,
-    w_user = 0.7,
-    w_clinical = 2.0,
-    prior_biomass_weight = 0.08,
-    prior_js_weight = 0.08
+final_score_model <- function() {
+  feature_names <- c(
+    "reads_support",
+    "rpmm_support",
+    "uniq_kmer_support",
+    "ambiguity_species_nondominance",
+    "reference_prevalence",
+    "reference_median_abundance",
+    "reference_relative_abundance",
+    "reference_at_or_below_q99",
+    "reference_at_or_below_q95",
+    "reference_at_or_below_q50",
+    "decontaminated_abundance",
+    "decontamination_ratio",
+    "kitome_clinical_overlap",
+    "clinical_membership",
+    "clinical_x_decon_support",
+    "kitome_only_x_decon_support",
+    "reference_prevalence_x_low_enrichment",
+    "unresolved_ambiguity_x_kmer_support"
   )
-}
-
-compute_sample_priors <- function(gs_long, meta_df, params, ref_comp_genus = NULL) {
-  w <- fp_weights(params$analysis_mode)
-
-  df0 <- gs_long %>%
-    distinct(sample, total_reads, microbial_reads) %>%
-    mutate(
-      log_microbial_reads = safe_log10(microbial_reads + 1),
-      biomass_scaled = scale01(log_microbial_reads)
+  
+  list(
+    feature_names = feature_names,
+    
+    intercept = 1.4925028628700236,
+    
+    score_offset = -4.9116688158923365,
+    
+    impute_values = setNames(
+      c(
+        -4.037345601140845,
+        -5.560973858316463,
+        -6.791598579642281,
+        0.3418085172884586,
+        0.5147502612680851,
+        3.9850698122986192,
+        -1.5728884233552725,
+        0.8623956126137355,
+        0.8000747849931447,
+        0.16708213885080395,
+        -4.451715457237202,
+        -0.5715219157760044,
+        0.057901234567901236,
+        -0.1365432098765432,
+        -0.6162082363065745,
+        -0.6411394789276108,
+        0.09053060438834876,
+        -0.8806494090358415
+      ),
+      feature_names
+    ),
+    
+    means = setNames(
+      c(
+        -4.037345601140845,
+        -5.560973858316463,
+        -6.791598579642281,
+        0.3418085172884586,
+        0.5147502612680849,
+        3.9850698122986192,
+        -1.5728884233552725,
+        0.8623956126137355,
+        0.8000747849931447,
+        0.16708213885080392,
+        -4.451715457237202,
+        -0.5715219157760044,
+        0.057901234567901236,
+        -0.1365432098765432,
+        -0.6162082363065745,
+        -0.6411394789276108,
+        0.09053060438834876,
+        -0.8806494090358415
+      ),
+      feature_names
+    ),
+    
+    scales = setNames(
+      c(
+        1.5128497297793833,
+        2.150800601166756,
+        1.5801497288378767,
+        0.283347787544235,
+        0.2586009543782396,
+        1.4482795250848732,
+        2.159788578677823,
+        0.3428430077184419,
+        0.3980383930748458,
+        0.37127182030409095,
+        2.974864934519208,
+        0.3576872461912685,
+        0.2335565918646145,
+        0.3433644735745873,
+        2.1033078430172503,
+        1.9433149640003147,
+        0.37318236981981967,
+        1.1019121244936676
+      ),
+      feature_names
+    ),
+    
+    standardized_weights = setNames(
+      c(
+        0.25588616843532014,
+        0.015857076698091055,
+        0.23738110321065942,
+        0.13855067199962626,
+        0.011924245703707377,
+        0.1542911530541554,
+        0.1201126650864708,
+        0.14623256321543165,
+        0.11672991539965896,
+        0.04072473708446774,
+        0.0684245954292958,
+        0.11686135228472111,
+        0.027464346253092846,
+        0.207776863730765,
+        0.2429811424456025,
+        0.1631094360713755,
+        0.07293897105982951,
+        0.13037149291281877
+      ),
+      feature_names
     )
-
-  js_df <- df0 %>% mutate(js_div = NA_real_)
-
-  if (!is.null(ref_comp_genus) && nrow(ref_comp_genus) > 0) {
-    ref_vec <- ref_comp_genus %>%
-      filter(is.finite(ref_p), ref_p > 0) %>%
-      select(genus = name_clean, ref_p)
-
-    samp_genus <- gs_long %>%
-      filter(rank == "G", is_microbial, !is_host, !is_plant, is.finite(rpmm), rpmm > 0) %>%
-      group_by(sample, genus = name_clean) %>%
-      summarise(rpmm = sum(rpmm, na.rm = TRUE), .groups = "drop")
-
-    if (nrow(samp_genus) > 0) {
-      js_calc <- samp_genus %>%
-        group_by(sample) %>%
-        group_modify(~{
-          d <- .x
-          p <- d$rpmm
-          p[!is.finite(p)] <- 0
-          names(p) <- d$genus
-          if (sum(p) <= 0) return(tibble(js_div = NA_real_))
-          p <- p / sum(p)
-
-          all_g <- union(names(p), ref_vec$genus)
-          p2 <- rep(0, length(all_g))
-          names(p2) <- all_g
-          q2 <- rep(0, length(all_g))
-          names(q2) <- all_g
-
-          p2[names(p)] <- p
-          q2[ref_vec$genus] <- ref_vec$ref_p
-          qsum <- sum(q2)
-
-          if (!is.finite(qsum) || qsum <= 0) return(tibble(js_div = NA_real_))
-          q2 <- q2 / qsum
-          tibble(js_div = js_divergence(p2, q2))
-        }) %>%
-        ungroup()
-
-      js_df <- df0 %>%
-        left_join(js_calc, by = "sample")
-    }
-  }
-
-  js_df <- js_df %>%
-    mutate(
-      js_div = if_else(is.finite(js_div), js_div, NA_real_)
-    )
-
-  prior_fp <- w$base_prior +
-    (w$prior_biomass_weight * (1 - coalesce(js_df$biomass_scaled, 0.5))) +
-    (w$prior_js_weight * (1 - coalesce(js_df$js_div, 0.5)))
-
-  prior_fp <- cap(prior_fp, 0.05, 0.95)
-
-  js_df %>%
-    mutate(prior_fp = prior_fp) %>%
-    select(sample, biomass_scaled, js_div, prior_fp)
+  )
 }
 
 compute_ambiguity_index <- function(gs_long) {
   base <- gs_long %>%
-    filter(rank %in% c("G", "S"), is_microbial, !is_host, !is_plant)
-
+    filter(
+      rank %in% c("G", "S"),
+      is_microbial,
+      !is_host,
+      !is_plant
+    )
+  
   if (nrow(base) == 0) {
-    return(tibble(sample = character(0), rank = character(0), name_clean = character(0), ambig_index = numeric(0)))
+    return(
+      tibble(
+        sample = character(0),
+        rank = character(0),
+        name_clean = character(0),
+        ambiguity_unresolved_fraction = numeric(0),
+        ambiguity_species_nondominance = numeric(0)
+      )
+    )
   }
-
+  
   genus_rows <- base %>%
     filter(rank == "G") %>%
-    transmute(sample, genus = name_clean, genus_clade = reads_clade, genus_direct = reads_direct)
-
+    transmute(
+      sample,
+      genus = name_clean,
+      genus_clade = suppressWarnings(
+        as.numeric(reads_clade)
+      ),
+      genus_direct = suppressWarnings(
+        as.numeric(reads_direct)
+      )
+    )
+  
   sp_sum <- base %>%
     filter(rank == "S") %>%
-    group_by(sample, genus) %>%
+    mutate(
+      species_direct_nonnegative = pmax(
+        coalesce0(reads_direct),
+        0
+      )
+    ) %>%
+    group_by(
+      sample,
+      genus
+    ) %>%
     summarise(
-      sp_total_direct = sum(reads_direct, na.rm = TRUE),
-      top_species = name_clean[which.max(reads_direct)[1]],
-      top_reads = max(reads_direct, na.rm = TRUE),
-      top_frac = if_else(sp_total_direct > 0, top_reads / sp_total_direct, NA_real_),
+      sp_total_direct = sum(
+        species_direct_nonnegative,
+        na.rm = TRUE
+      ),
+      top_reads = max(
+        species_direct_nonnegative,
+        na.rm = TRUE
+      ),
+      top_frac = if_else(
+        sp_total_direct > 0,
+        top_reads / sp_total_direct,
+        NA_real_
+      ),
       .groups = "drop"
     )
-
+  
   sp_out <- base %>%
     filter(rank == "S") %>%
-    left_join(sp_sum, by = c("sample", "genus")) %>%
-    left_join(genus_rows, by = c("sample", "genus")) %>%
-    mutate(
-      direct_frac = if_else(is.finite(genus_clade) & genus_clade > 0, genus_direct / genus_clade, NA_real_),
-      ambig_index = 0.5 * coalesce0(direct_frac) + 0.5 * (1 - coalesce(top_frac, 1)),
-      ambig_index = cap(ambig_index, 0, 1)
+    left_join(
+      sp_sum,
+      by = c(
+        "sample",
+        "genus"
+      )
     ) %>%
-    select(sample, rank, name_clean, ambig_index)
-
+    left_join(
+      genus_rows,
+      by = c(
+        "sample",
+        "genus"
+      )
+    ) %>%
+    mutate(
+      ambiguity_unresolved_fraction = if_else(
+        is.finite(genus_clade) &
+          genus_clade > 0 &
+          is.finite(genus_direct),
+        cap(
+          genus_direct / genus_clade,
+          0,
+          1
+        ),
+        NA_real_
+      ),
+      
+      ambiguity_species_nondominance = if_else(
+        is.finite(top_frac),
+        cap(
+          1 - top_frac,
+          0,
+          1
+        ),
+        NA_real_
+      )
+    ) %>%
+    select(
+      sample,
+      rank,
+      name_clean,
+      ambiguity_unresolved_fraction,
+      ambiguity_species_nondominance
+    )
+  
   g_out <- genus_rows %>%
     mutate(
       rank = "G",
       name_clean = genus,
-      ambig_index = if_else(is.finite(genus_clade) & genus_clade > 0, genus_direct / genus_clade, 0),
-      ambig_index = cap(ambig_index, 0, 1)
+      
+      ambiguity_unresolved_fraction = if_else(
+        is.finite(genus_clade) &
+          genus_clade > 0 &
+          is.finite(genus_direct),
+        cap(
+          genus_direct / genus_clade,
+          0,
+          1
+        ),
+        NA_real_
+      ),
+      
+      ambiguity_species_nondominance = NA_real_
     ) %>%
-    select(sample, rank, name_clean, ambig_index)
-
-  bind_rows(g_out, sp_out)
+    select(
+      sample,
+      rank,
+      name_clean,
+      ambiguity_unresolved_fraction,
+      ambiguity_species_nondominance
+    )
+  
+  bind_rows(
+    g_out,
+    sp_out
+  )
 }
 
 # ------------------- Celltaminate Algorithm -----------------------------------------------------------
@@ -1093,16 +1143,7 @@ compute_taxon_features <- function(gs_long, meta_df, params, user_contam = chara
 
   n_samples <- meta_df %>% distinct(sample) %>% nrow()
 
-  control_samples <- character(0)
-  if ("is_control" %in% colnames(meta_df)) {
-    control_flag <- tolower(trimws(as.character(meta_df$is_control))) %in% c("true", "t", "1", "yes", "y")
-    control_samples <- unique(as.character(meta_df$sample[!is.na(control_flag) & control_flag]))
-    control_samples <- control_samples[nzchar(control_samples)]
-  }
-  n_controls <- length(unique(control_samples))
-  
   use_cohort_prevalence <- is.finite(n_samples) && n_samples >= 3
-  use_control_prevalence <- is.finite(n_controls) && n_controls >= 3
   
   base_filt <- gs_long$is_microbial & !gs_long$is_host & !gs_long$is_plant & gs_long$rank %in% c("G", "S")
 
@@ -1145,56 +1186,6 @@ compute_taxon_features <- function(gs_long, meta_df, params, user_contam = chara
       )
     )
 
-  if (n_controls > 0) {
-    control_tax <- gs_long %>%
-      filter(base_filt, sample %in% control_samples) %>%
-      group_by(rank, name_clean) %>%
-      summarise(
-        control_prevalence = if_else(
-          use_control_prevalence,
-          n_distinct(sample[is.finite(reads_clade) & reads_clade > 0]) / n_controls,
-          NA_real_
-        ),
-        mean_rpmm_control_detected = if_else(
-          any(is.finite(reads_clade) & reads_clade > 0),
-          mean(rpmm[is.finite(reads_clade) & reads_clade > 0], na.rm = TRUE),
-          NA_real_
-        ),
-        median_rpmm_control_detected = if_else(
-          any(is.finite(reads_clade) & reads_clade > 0),
-          median(rpmm[is.finite(reads_clade) & reads_clade > 0], na.rm = TRUE),
-          NA_real_
-        ),
-        .groups = "drop"
-      )
-    
-    tax_base <- tax_base %>%
-      left_join(control_tax, by = c("rank", "name_clean"))
-    
-    if (use_control_prevalence) {
-      tax_base <- tax_base %>%
-        mutate(
-          control_prevalence = coalesce(control_prevalence, 0),
-          mean_rpmm_control_detected = case_when(
-            control_prevalence == 0 ~ 0,
-            is.finite(mean_rpmm_control_detected) ~ mean_rpmm_control_detected,
-            TRUE ~ NA_real_
-          ),
-          median_rpmm_control_detected = case_when(
-            control_prevalence == 0 ~ 0,
-            is.finite(median_rpmm_control_detected) ~ median_rpmm_control_detected,
-            TRUE ~ NA_real_
-          )
-        )
-    } else {
-      tax_base <- tax_base %>%
-        mutate(
-          control_prevalence = NA_real_,
-          mean_rpmm_control_detected = NA_real_,
-          median_rpmm_control_detected = NA_real_
-        )
-    }
-  }
 
   tax_cor <- gs_long %>%
     filter(base_filt) %>%
@@ -1248,172 +1239,346 @@ compute_taxon_features <- function(gs_long, meta_df, params, user_contam = chara
         uniq_med = median(uniq_kmers, na.rm = TRUE),
         .groups = "drop"
       )
-    
+
     tax_base <- tax_base %>%
       left_join(kmer_med, by = c("rank", "name_clean"))
   } else {
     tax_base$kmer_med <- NA_real_
     tax_base$uniq_med <- NA_real_
   }
-  
-  if (!"control_prevalence" %in% colnames(tax_base)) {
-    tax_base$control_prevalence <- NA_real_
-  }
-  if (!"mean_rpmm_control_detected" %in% colnames(tax_base)) {
-    tax_base$mean_rpmm_control_detected <- NA_real_
-  }
-  if (!"median_rpmm_control_detected" %in% colnames(tax_base)) {
-    tax_base$median_rpmm_control_detected <- NA_real_
-  }
-  
-  tax_base <- tax_base %>%
-    mutate(
-      control_prevalence = suppressWarnings(as.numeric(control_prevalence)),
-      mean_rpmm_control_detected = suppressWarnings(as.numeric(mean_rpmm_control_detected)),
-      median_rpmm_control_detected = suppressWarnings(as.numeric(median_rpmm_control_detected)),
-      bg_rpmm = pmax(
-        coalesce0(median_rpmm_control_detected),
-        coalesce0(ref_med_rpmm),
-        coalesce0(cohort_bg_rpmm)
-      )
-    )
 
-  sample_priors <- compute_sample_priors(gs_long, meta_df, params, ref_comp_genus = REF_BG$comp_genus)
+  tax_base <- tax_base %>%
+    mutate(bg_rpmm = pmax(coalesce0(ref_med_rpmm), coalesce0(cohort_bg_rpmm)))
 
   list(
     tax_features = tax_base,
-    gs_long = gs_long,
-    sample_priors = sample_priors
+    gs_long = gs_long
   )
 }
 
 
-center_fp_component <- function(x) {
-  2 * (x - 0.5)
-}
-
-compute_fp_components <- function(out, params) {
-  comp_low_reads <- fp_low_by_mid(out$reads_clade, mid = params$fp_mid_reads, slope = 0.9)
-  comp_low_rpmm <- fp_low_by_mid(out$rpmm, mid = params$fp_mid_rpmm, slope = 0.9)
-
-  comp_low_kmer <- {
-    c1 <- ifelse(is.na(out$uniq_kmers), 0.5, fp_low_by_mid(out$uniq_kmers, mid = params$fp_mid_uniq_kmers, slope = 0.9))
-    c2 <- ifelse(is.na(out$kmer_per_read), 0.5, fp_low_linear(out$kmer_per_read, mid = params$fp_mid_kmer_per_read, slope = 0.25))
-    pmax(c1, c2, na.rm = TRUE)
-  }
-
-  comp_ref_bg <- ifelse(
-    is.finite(out$ref_n) & out$ref_n >= 5 & is.finite(out$ref_med_rpmm),
-    ref_fp_component(out$log_rpmm, out$ref_q50_log, out$ref_q95_log, out$ref_q99_log, out$ref_n, min_n = 5),
-    0.5
+log1p_nonnegative_score <- function(x) {
+  x <- suppressWarnings(
+    as.numeric(x)
   )
-  comp_ref_prev <- ifelse(
-    is.finite(out$ref_prev),
-    0.5 + 0.5 * sqrt(cap(out$ref_prev, 0, 1)),
-    0.5
+  
+  out <- rep(
+    NA_real_,
+    length(x)
   )
-  comp_fc_ref <- ifelse(
-    is.finite(out$log2FC_vs_reference_median),
-    plogis((0 - out$log2FC_vs_reference_median) / 2.0),
-    0.5
-  )
-  comp_ctrl_enrich <- ifelse(
-    is.finite(out$control_median_rpmm) & is.finite(out$log2FC_vs_control_median),
-    plogis((1 - out$log2FC_vs_control_median) / 0.75),
-    0.5
-  )
-  comp_ctrl_prev <- ifelse(
-    is.finite(out$control_prevalence),
-    0.25 + 0.75 * sqrt(cap(out$control_prevalence, 0, 1)),
-    0.5
-  )
-  comp_cohort_prev <- 0.5 + 0.5 * sqrt(cap(coalesce0(out$prevalence_any), 0, 1))
-  comp_common_bg <- 0.5 + 0.5 * sqrt(cap(coalesce0(out$prevalence_any) * coalesce0(out$ref_prev), 0, 1))
-  comp_ubiq <- 0.5 + 0.5 * cap(coalesce0(out$ubiquity), 0, 1)
-  comp_biomass <- ifelse(is.na(out$cor_with_biomass), 0.5, plogis((-out$cor_with_biomass) / 0.25))
-  comp_nonmicrobe_corr <- ifelse(is.na(out$cor_with_nonmicrobe_frac), 0.5, plogis((out$cor_with_nonmicrobe_frac) / 0.25))
-  comp_decon <- fp_low_by_mid(out$decon_rpmm, mid = params$fp_mid_decon_rpmm, slope = 0.9)
-  comp_decon_ratio <- ifelse(
-    is.finite(out$decon_ratio),
-    cap(1 - out$decon_ratio, 0, 1),
-    0.5
-  )
-  comp_ambig <- 0.5 + 0.5 * coalesce0(out$ambig_index)
-  comp_kit <- ifelse(coalesce(out$in_kitome, FALSE), 0.92, 0.5)
-  comp_user <- ifelse(coalesce(out$in_user_contam, FALSE), 0.85, 0.5)
-  comp_clin <- ifelse(coalesce(out$in_clinical_panel, FALSE), 0.25, 0.5)
-
-  list(
-    comp_low_reads = comp_low_reads,
-    comp_low_rpmm = comp_low_rpmm,
-    comp_low_kmer = comp_low_kmer,
-    comp_ref_bg = comp_ref_bg,
-    comp_ref_prev = comp_ref_prev,
-    comp_fc_ref = comp_fc_ref,
-    comp_ctrl_enrich = comp_ctrl_enrich,
-    comp_ctrl_prev = comp_ctrl_prev,
-    comp_cohort_prev = comp_cohort_prev,
-    comp_common_bg = comp_common_bg,
-    comp_ubiq = comp_ubiq,
-    comp_biomass = comp_biomass,
-    comp_nonmicrobe_corr = comp_nonmicrobe_corr,
-    comp_decon = comp_decon,
-    comp_decon_ratio = comp_decon_ratio,
-    comp_ambig = comp_ambig,
-    comp_kit = comp_kit,
-    comp_user = comp_user,
-    comp_clin = comp_clin
-  )
-}
-
-compute_fp_logit <- function(prior_fp, fp_components, params, weights) {
-  qlogis(prior_fp) +
-    (params$fp_aggressiveness * (
-      weights$w_low_reads * center_fp_component(fp_components$comp_low_reads) +
-      weights$w_low_rpmm * center_fp_component(fp_components$comp_low_rpmm) +
-      weights$w_low_kmer * center_fp_component(fp_components$comp_low_kmer) +
-      weights$w_ref_bg * center_fp_component(fp_components$comp_ref_bg) +
-      weights$w_ref_prev * center_fp_component(fp_components$comp_ref_prev) +
-      weights$w_fc_ref * center_fp_component(fp_components$comp_fc_ref) +
-      weights$w_ctrl_enrich * center_fp_component(fp_components$comp_ctrl_enrich) +
-      weights$w_ctrl_prev * center_fp_component(fp_components$comp_ctrl_prev) +
-      weights$w_cohort_prev * center_fp_component(fp_components$comp_cohort_prev) +
-      weights$w_common_bg * center_fp_component(fp_components$comp_common_bg) +
-      weights$w_ubiq * center_fp_component(fp_components$comp_ubiq) +
-      weights$w_biomass * center_fp_component(fp_components$comp_biomass) +
-      weights$w_nonmicrobe_corr * center_fp_component(fp_components$comp_nonmicrobe_corr) +
-      weights$w_decon * center_fp_component(fp_components$comp_decon) +
-      weights$w_decon_ratio * center_fp_component(fp_components$comp_decon_ratio) +
-      weights$w_ambig * center_fp_component(fp_components$comp_ambig) +
-      weights$w_kitome * center_fp_component(fp_components$comp_kit) +
-      weights$w_user * center_fp_component(fp_components$comp_user) +
-      weights$w_clinical * center_fp_component(fp_components$comp_clin)
-    ))
-}
-
-add_fp_component_columns <- function(out, fp_components) {
-  out %>%
-    mutate(
-      fp_comp_low_reads = fp_components$comp_low_reads,
-      fp_comp_low_rpmm = fp_components$comp_low_rpmm,
-      fp_comp_low_kmer = fp_components$comp_low_kmer,
-      fp_comp_ref_bg = if_else(is.finite(ref_n) & ref_n >= 5 & is.finite(ref_med_rpmm), fp_components$comp_ref_bg, NA_real_),
-      fp_comp_ref_prev = if_else(is.finite(ref_prev), fp_components$comp_ref_prev, NA_real_),
-      fp_comp_fc_ref = if_else(is.finite(log2FC_vs_reference_median), fp_components$comp_fc_ref, NA_real_),
-      fp_comp_ctrl_enrich = if_else(is.finite(control_median_rpmm) & is.finite(log2FC_vs_control_median), fp_components$comp_ctrl_enrich, NA_real_),
-      fp_comp_ctrl_prev = if_else(is.finite(control_prevalence), fp_components$comp_ctrl_prev, NA_real_),
-      fp_comp_cohort_prev = fp_components$comp_cohort_prev,
-      fp_comp_common_bg = fp_components$comp_common_bg,
-      fp_comp_ubiq = fp_components$comp_ubiq,
-      fp_comp_biomass = fp_components$comp_biomass,
-      fp_comp_nonmicrobe_corr = fp_components$comp_nonmicrobe_corr,
-      fp_comp_decon = fp_components$comp_decon,
-      fp_comp_decon_ratio = if_else(is.finite(decon_ratio), fp_components$comp_decon_ratio, NA_real_),
-      fp_comp_ambig = fp_components$comp_ambig
+  
+  ok <- is.finite(x)
+  
+  out[ok] <- log1p(
+    pmax(
+      x[ok],
+      0
     )
+  )
+  
+  out
 }
 
-apply_calls <- function(gs_long, tax_features, meta_df, params, sample_priors) {
+compute_final_score_features <- function(out) {
+  log_reads <- log1p_nonnegative_score(
+    out$reads_clade
+  )
+  
+  log_rpmm_score <- log1p_nonnegative_score(
+    out$rpmm
+  )
+  
+  log_uniq <- log1p_nonnegative_score(
+    out$uniq_kmers
+  )
+  
+  log_decon <- log1p_nonnegative_score(
+    out$decon_rpmm
+  )
+  
+  log_ref_median <- log1p_nonnegative_score(
+    out$ref_med_rpmm
+  )
+  
+  ref_available <-
+    is.finite(out$log_rpmm) &
+    is.finite(out$ref_q50_log) &
+    is.finite(out$ref_q95_log) &
+    is.finite(out$ref_q99_log)
+  
+  reference_at_or_below_q99 <- ifelse(
+    ref_available,
+    as.numeric(
+      out$log_rpmm <=
+        out$ref_q99_log
+    ),
+    NA_real_
+  )
+  
+  reference_at_or_below_q95 <- ifelse(
+    ref_available,
+    as.numeric(
+      out$log_rpmm <=
+        out$ref_q95_log
+    ),
+    NA_real_
+  )
+  
+  reference_at_or_below_q50 <- ifelse(
+    ref_available,
+    as.numeric(
+      out$log_rpmm <=
+        out$ref_q50_log
+    ),
+    NA_real_
+  )
+  
+  reference_prevalence <- ifelse(
+    is.finite(out$ref_prev),
+    cap(
+      out$ref_prev,
+      0,
+      1
+    ),
+    NA_real_
+  )
+  
+  reference_relative_abundance <- ifelse(
+    is.finite(out$rpmm) &
+      is.finite(out$ref_med_rpmm),
+    log_ref_median -
+      log_rpmm_score,
+    NA_real_
+  )
+  
+  ambiguity_unresolved_fraction <- ifelse(
+    is.finite(
+      out$ambiguity_unresolved_fraction
+    ),
+    cap(
+      out$ambiguity_unresolved_fraction,
+      0,
+      1
+    ),
+    NA_real_
+  )
+  
+  ambiguity_species_nondominance <- ifelse(
+    is.finite(
+      out$ambiguity_species_nondominance
+    ),
+    cap(
+      out$ambiguity_species_nondominance,
+      0,
+      1
+    ),
+    NA_real_
+  )
+  
+  decontamination_ratio_raw <- ifelse(
+    is.finite(out$decon_ratio),
+    cap(
+      out$decon_ratio,
+      0,
+      1
+    ),
+    NA_real_
+  )
+  
+  in_clinical <-
+    !is.na(out$in_clinical_panel) &
+    out$in_clinical_panel
+  
+  in_kitome <-
+    !is.na(out$in_kitome) &
+    out$in_kitome
+  
+  clinical <- as.numeric(
+    in_clinical
+  )
+  
+  kitome_only <- as.numeric(
+    in_kitome &
+      !in_clinical
+  )
+  
+  kitome_clinical_overlap <- as.numeric(
+    in_kitome &
+      in_clinical
+  )
+  
+  low_enrichment <- ifelse(
+    is.finite(
+      reference_relative_abundance
+    ),
+    pmax(
+      reference_relative_abundance,
+      0
+    ),
+    NA_real_
+  )
+  
+  tibble(
+    reads_support =
+      -log_reads,
+    
+    rpmm_support =
+      -log_rpmm_score,
+    
+    uniq_kmer_support =
+      -log_uniq,
+    
+    ambiguity_species_nondominance =
+      ambiguity_species_nondominance,
+    
+    reference_prevalence =
+      reference_prevalence,
+    
+    reference_median_abundance =
+      log_ref_median,
+    
+    reference_relative_abundance =
+      reference_relative_abundance,
+    
+    reference_at_or_below_q99 =
+      reference_at_or_below_q99,
+    
+    reference_at_or_below_q95 =
+      reference_at_or_below_q95,
+    
+    reference_at_or_below_q50 =
+      reference_at_or_below_q50,
+    
+    decontaminated_abundance =
+      -log_decon,
+    
+    decontamination_ratio =
+      -decontamination_ratio_raw,
+    
+    kitome_clinical_overlap =
+      kitome_clinical_overlap,
+    
+    clinical_membership =
+      -clinical,
+    
+    clinical_x_decon_support =
+      -clinical *
+      log_decon,
+    
+    kitome_only_x_decon_support =
+      -kitome_only *
+      log_decon,
+    
+    reference_prevalence_x_low_enrichment =
+      reference_prevalence *
+      low_enrichment,
+    
+    unresolved_ambiguity_x_kmer_support =
+      -ambiguity_unresolved_fraction *
+      log_uniq
+  )
+}
+
+compute_final_score <- function(out) {
+  model <- final_score_model()
+  
+  features <- compute_final_score_features(
+    out
+  )
+  
+  x <- as.matrix(
+    features[
+      ,
+      model$feature_names,
+      drop = FALSE
+    ]
+  )
+  
+  storage.mode(x) <- "double"
+  
+  for (
+    j in seq_along(
+      model$feature_names
+    )
+  ) {
+    bad <- !is.finite(
+      x[, j]
+    )
+    
+    if (any(bad)) {
+      x[bad, j] <-
+        model$impute_values[j]
+    }
+  }
+  
+  z <- sweep(
+    x,
+    2,
+    model$means,
+    FUN = "-"
+  )
+  
+  z <- sweep(
+    z,
+    2,
+    model$scales,
+    FUN = "/"
+  )
+  
+  contributions <- sweep(
+    z,
+    2,
+    model$standardized_weights,
+    FUN = "*"
+  )
+  
+  eta <-
+    model$intercept +
+    rowSums(
+      contributions
+    )
+  
+  mapped_logit <-
+    eta +
+    model$score_offset
+  
+  contam_prob <- plogis(
+    mapped_logit
+  )
+  
+  fp_score <-
+    100 *
+    contam_prob
+  
+  colnames(
+    contributions
+  ) <- paste0(
+    "score_contrib_",
+    model$feature_names
+  )
+  
+  list(
+    features = features,
+    
+    standardized_features = z,
+    
+    contributions = as.data.frame(
+      contributions,
+      stringsAsFactors = FALSE,
+      check.names = FALSE
+    ),
+    
+    eta = eta,
+    
+    mapped_logit = mapped_logit,
+    
+    contam_prob = contam_prob,
+    
+    fp_score = fp_score
+  )
+}
+
+apply_calls <- function(gs_long, tax_features, meta_df, params) {
   meta2 <- meta_df %>%
     mutate(group = if_else(is.na(group) | !nzchar(group), "Group 1", group))
 
@@ -1426,7 +1591,6 @@ apply_calls <- function(gs_long, tax_features, meta_df, params, sample_priors) {
       name_clean,
       prevalence,
       prevalence_any,
-      control_prevalence,
       ubiquity,
       cor_with_biomass,
       cor_with_nonmicrobe_frac,
@@ -1439,15 +1603,13 @@ apply_calls <- function(gs_long, tax_features, meta_df, params, sample_priors) {
       ref_q95_log,
       ref_q99_log,
       ref_med_rpmm,
-      median_rpmm_control_detected,
       cohort_bg_rpmm,
       bg_rpmm
     )
 
   out <- gs_long %>%
     left_join(tf_keep, by = c("rank", "name_clean")) %>%
-    left_join(group_sizes, by = "group") %>%
-    left_join(sample_priors %>% select(sample, prior_fp), by = "sample")
+    left_join(group_sizes, by = "group")
 
   out <- out %>%
     mutate(
@@ -1457,7 +1619,6 @@ apply_calls <- function(gs_long, tax_features, meta_df, params, sample_priors) {
       ref_q95_log = suppressWarnings(as.numeric(ref_q95_log)),
       ref_q99_log = suppressWarnings(as.numeric(ref_q99_log)),
       ref_med_rpmm = suppressWarnings(as.numeric(ref_med_rpmm)),
-      median_rpmm_control_detected = suppressWarnings(as.numeric(median_rpmm_control_detected)),
       cohort_bg_rpmm = suppressWarnings(as.numeric(cohort_bg_rpmm)),
       bg_rpmm = suppressWarnings(as.numeric(bg_rpmm))
     )
@@ -1465,18 +1626,14 @@ apply_calls <- function(gs_long, tax_features, meta_df, params, sample_priors) {
   out <- out %>%
     mutate(
       reference_median_rpmm = if_else(is.finite(ref_med_rpmm), ref_med_rpmm, NA_real_),
-      control_median_rpmm = if_else(is.finite(median_rpmm_control_detected), median_rpmm_control_detected, NA_real_),
       log2FC_vs_reference_median = log2((coalesce0(rpmm) + params$fc_pseudocount) / (coalesce0(reference_median_rpmm) + params$fc_pseudocount)),
-      log2FC_vs_control_median = log2((coalesce0(rpmm) + params$fc_pseudocount) / (coalesce0(control_median_rpmm) + params$fc_pseudocount)),
-      enriched_vs_controls = if_else(is.finite(control_median_rpmm), log2FC_vs_control_median > 0, NA),
       qc_pass = is_microbial & !is_host & !is_plant
     )
 
   amb <- compute_ambiguity_index(out)
 
   out <- out %>%
-    left_join(amb, by = c("sample", "rank", "name_clean")) %>%
-    mutate(ambig_index = coalesce(ambig_index, 0))
+    left_join(amb, by = c("sample", "rank", "name_clean"))
 
   out <- out %>%
     mutate(
@@ -1487,43 +1644,50 @@ apply_calls <- function(gs_long, tax_features, meta_df, params, sample_priors) {
       log_decon_rpmm = safe_log(decon_rpmm, eps = params$eps)
     )
 
-  w <- fp_weights(params$analysis_mode)
-
-  prior_fp <- cap(coalesce(out$prior_fp, w$base_prior), 0.05, 0.95)
-  fp_components <- compute_fp_components(out, params)
-  fp_logit <- compute_fp_logit(prior_fp, fp_components, params, w)
-
-  out <- out %>%
-    mutate(
-      contam_prob = plogis(fp_logit),
-      fp_score = 100 * contam_prob,
-      fp_falsepos_flag = fp_score >= params$fp_falsepos_cutoff,
-      fp_true_flag = fp_score <= params$fp_true_cutoff
+  score_result <- compute_final_score(
+    out
+  )
+  
+  out <- bind_cols(
+    out,
+    as_tibble(
+      score_result$contributions
     )
-
-  out <- add_fp_component_columns(out, fp_components)
+  ) %>%
+    mutate(
+      final_model_logit =
+        score_result$eta,
+      
+      score_mapped_logit =
+        score_result$mapped_logit,
+      
+      contam_prob =
+        score_result$contam_prob,
+      
+      fp_score =
+        score_result$fp_score,
+      
+      fp_true_flag =
+        fp_score <=
+        params$fp_true_cutoff
+    )
 
   out <- out %>%
     mutate(
       call = case_when(
         !is_microbial | is_host | is_plant ~ "Non-microbial / Host",
-        fp_true_flag ~ "Likely true",
-        fp_falsepos_flag ~ "Likely false positive / background",
-        TRUE ~ "Uncertain"
+        fp_true_flag ~ "Prioritized",
+        TRUE ~ "Not prioritized"
       ),
       call_reason = case_when(
         !is_microbial | is_host | is_plant ~ "Excluded as non-microbial or host",
-        call == "Likely true" ~ paste0(
-          "Score ", round(fp_score, 1), " <= likely true cutoff ", round(params$fp_true_cutoff, 1),
-          "; high abundance above background outweighs cohort and reference background signals"
-        ),
-        call == "Likely false positive / background" ~ paste0(
-          "Score ", round(fp_score, 1), " >= false positive cutoff ", round(params$fp_falsepos_cutoff, 1),
-          "; cohort or reference background signals outweigh abundance above background"
+        call == "Prioritized" ~ paste0(
+          "Score ", round(fp_score, 1),
+          " <= prioritization cutoff ", round(params$fp_true_cutoff, 1)
         ),
         TRUE ~ paste0(
-          "Score ", round(fp_score, 1), " is between ", round(params$fp_true_cutoff, 1), " and ", round(params$fp_falsepos_cutoff, 1),
-          "; evidence is mixed between true-signal and background patterns"
+          "Score ", round(fp_score, 1),
+          " > prioritization cutoff ", round(params$fp_true_cutoff, 1)
         )
       )
     )
@@ -1568,27 +1732,15 @@ get_kraken_tree_info <- function(raw_df) {
   )
 }
 
-compute_remove_taxa_for_sample <- function(gs, quick, protected_taxa = character(0)) {
-  remove_taxa <- character(0)
-
-  if ("false" %in% quick) {
-    remove_taxa <- c(remove_taxa, gs$name_clean[gs$call == "Likely false positive / background"])
-  }
-  if ("unc" %in% quick) {
-    remove_taxa <- c(remove_taxa, gs$name_clean[gs$call == "Uncertain"])
-  }
-  if ("true" %in% quick) {
-    remove_taxa <- c(remove_taxa, gs$name_clean[gs$call == "Likely true"])
-  }
-
-  remove_taxa <- unique(remove_taxa)
+compute_remove_taxa_for_sample <- function(gs, protected_taxa = character(0)) {
+  remove_taxa <- unique(gs$name_clean[gs$call == "Not prioritized"])
   remove_taxa <- remove_taxa[!is.na(remove_taxa) & nzchar(remove_taxa)]
   setdiff(remove_taxa, protected_taxa)
 }
 
 compute_keep_taxa_for_sample <- function(gs, remove_taxa, protected_taxa = character(0)) {
   keep_taxa <- gs %>%
-    filter(rank %in% c("G", "S"), call == "Likely true") %>%
+    filter(rank %in% c("G", "S"), call == "Prioritized") %>%
     pull(name_clean) %>%
     unique()
 
@@ -1695,8 +1847,8 @@ retain_kraken_raw <- function(raw_df, keep_taxa, keep_descendants = FALSE, keep_
   cleaned
 }
 
-build_cleaned_report_for_sample <- function(raw_df, gs, quick, protected_taxa = character(0), keep_descendants = FALSE) {
-  remove_taxa <- compute_remove_taxa_for_sample(gs, quick = quick, protected_taxa = protected_taxa)
+build_cleaned_report_for_sample <- function(raw_df, gs, protected_taxa = character(0), keep_descendants = FALSE) {
+  remove_taxa <- compute_remove_taxa_for_sample(gs, protected_taxa = protected_taxa)
   keep_taxa <- compute_keep_taxa_for_sample(gs, remove_taxa = remove_taxa, protected_taxa = protected_taxa)
   retain_kraken_raw(raw_df, keep_taxa = keep_taxa, keep_descendants = keep_descendants)
 }
@@ -1807,13 +1959,10 @@ HELP_TEXT <- paste(
   "  --collapse_species TRUE|FALSE",
   "  --collapse_min_genus_reads INTEGER",
   "  --collapse_top_frac NUMERIC",
-  "  --fp_falsepos_cutoff NUMERIC",
   "  --fp_true_cutoff NUMERIC",
-  "  --fp_aggressiveness NUMERIC",
   "  --ref_bg_tsv PATH",
   "  --kitome_blacklist_tsv PATH",
   "  --clinical_panel_tsv PATH",
-  "  --quick_remove false,unc,true",
   "  --protected_taxa_tsv PATH",
   "  --keep_descendants TRUE|FALSE",
   "  --show_fp_breakdown TRUE|FALSE",
@@ -1979,8 +2128,7 @@ default_metadata <- function(sample_names) {
   tibble(
     sample = as.character(sample_names),
     group = "Group 1",
-    sample_type = "Clinical / sterile",
-    is_control = FALSE
+    sample_type = "Clinical / sterile"
   )
 }
 
@@ -2010,14 +2158,12 @@ load_metadata <- function(metadata_tsv, sample_names) {
 
   if (!"group" %in% colnames(meta)) meta$group <- "Group 1"
   if (!"sample_type" %in% colnames(meta)) meta$sample_type <- "Clinical / sterile"
-  if (!"is_control" %in% colnames(meta)) meta$is_control <- FALSE
 
   meta <- meta %>%
     transmute(
       sample = as.character(sample),
       group = as.character(group),
-      sample_type = as.character(sample_type),
-      is_control = tolower(trimws(as.character(is_control))) %in% c("true", "t", "1", "yes", "y")
+      sample_type = as.character(sample_type)
     ) %>%
     distinct(sample, .keep_all = TRUE)
 
@@ -2027,8 +2173,7 @@ load_metadata <- function(metadata_tsv, sample_names) {
     transmute(
       sample = sample,
       group = dplyr::coalesce(group, group.default),
-      sample_type = dplyr::coalesce(sample_type, sample_type.default),
-      is_control = dplyr::coalesce(is_control, is_control.default)
+      sample_type = dplyr::coalesce(sample_type, sample_type.default)
     )
 
   meta
@@ -2073,20 +2218,25 @@ load_protected_taxa_map <- function(path) {
 build_params <- function(args) {
   list(
     analysis_mode = "Cell-line",
-    tax_level = toupper(args$tax_level %||% "S"),
+    
+    tax_level = toupper(
+      args$tax_level %||% "S"
+    ),
+    
     eps = 1e-9,
+    
     min_reads_prevalence = 5,
+    
     min_rpmm_prevalence = 0.2,
+    
     min_uniq_kmers_prevalence = 96,
+    
     min_kmer_per_read_prevalence = 0.4,
-    fp_falsepos_cutoff = as.numeric(args$fp_falsepos_cutoff %||% 75),
-    fp_true_cutoff = as.numeric(args$fp_true_cutoff %||% 5),
-    fp_aggressiveness = as.numeric(args$fp_aggressiveness %||% 1.15),
-    fp_mid_reads = 12,
-    fp_mid_rpmm = 8,
-    fp_mid_decon_rpmm = 4,
-    fp_mid_uniq_kmers = 96,
-    fp_mid_kmer_per_read = 0.4,
+    
+    fp_true_cutoff = as.numeric(
+      args$fp_true_cutoff %||% 1
+    ),
+    
     fc_pseudocount = 0.1
   )
 }
@@ -2095,7 +2245,7 @@ init_reference_tables <- function(args) {
   REF_BG <<- if (!is.null(args$ref_bg_tsv) && nzchar(args$ref_bg_tsv)) {
     load_ref_cell_lines(path = args$ref_bg_tsv, eps = 1e-9)
   } else {
-    list(available = FALSE, path = NULL, ref = NULL, stats = NULL, comp_genus = NULL)
+    list(available = FALSE, path = NULL, ref = NULL, stats = NULL)
   }
 
   KITOME_BG_BLACKLIST <<- if (!is.null(args$kitome_blacklist_tsv) && nzchar(args$kitome_blacklist_tsv)) {
@@ -2166,10 +2316,7 @@ analyze_sample_list <- function(sample_list, meta, prm, collapse_species_flag = 
         rpm = ifelse(is.finite(total_reads) & total_reads > 0, reads_clade / total_reads * 1e6, NA_real_),
         rpmm = ifelse(is_microbial & is.finite(microbial_reads) & microbial_reads > 0, reads_clade / microbial_reads * 1e6, NA_real_),
         log_rpmm = safe_log(rpmm, eps = prm$eps),
-        genus = dplyr::case_when(
-          rank == "G" ~ as.character(name_clean),
-          TRUE ~ as.character(genus_ancestor)
-        )
+        genus = ifelse(rank == "G", name_clean, genus_ancestor)
       )
 
     gs_list[[nm]] <- gs
@@ -2208,8 +2355,6 @@ analyze_sample_list <- function(sample_list, meta, prm, collapse_species_flag = 
   meta$sample <- as.character(meta$sample)
   meta$group <- as.character(meta$group)
   meta$sample_type <- as.character(meta$sample_type)
-  if (!("is_control" %in% colnames(meta))) meta$is_control <- FALSE
-  meta$is_control <- tolower(trimws(as.character(meta$is_control))) %in% c("true", "t", "1", "yes", "y")
 
   gs_long <- gs_long %>%
     left_join(meta, by = "sample")
@@ -2233,9 +2378,7 @@ analyze_sample_list <- function(sample_list, meta, prm, collapse_species_flag = 
 
   tax_features <- engine$tax_features
   gs_long <- engine$gs_long
-  sample_priors <- engine$sample_priors
-
-  gs_long <- apply_calls(gs_long, tax_features, meta, prm, sample_priors)
+  gs_long <- apply_calls(gs_long, tax_features, meta, prm)
 
   n_cohort_samples <- dplyr::n_distinct(meta$sample)
   prevalence_display <- gs_long %>%
@@ -2265,22 +2408,20 @@ analyze_sample_list <- function(sample_list, meta, prm, collapse_species_flag = 
         sp <- sp[is.finite(sp) & sp > 0]
         if (length(sp) == 0) NA_real_ else calc_shannon(sp / 1e6)
       },
-      n_true = sum(rank == tax_level_now & call == "Likely true", na.rm = TRUE),
-      n_uncertain = sum(rank == tax_level_now & call == "Uncertain", na.rm = TRUE),
-      n_contaminant = sum(rank == tax_level_now & call == "Likely false positive / background", na.rm = TRUE),
+      n_prioritized = sum(rank == tax_level_now & call == "Prioritized", na.rm = TRUE),
+      n_not_prioritized = sum(rank == tax_level_now & call == "Not prioritized", na.rm = TRUE),
       .groups = "drop"
     )
 
   cohort_summary <- cohort_summary %>%
-    select(-any_of(c("n_genus_qc", "n_species_qc", "shannon", "n_true", "n_uncertain", "n_contaminant"))) %>%
+    select(-any_of(c("n_genus_qc", "n_species_qc", "shannon", "n_prioritized", "n_not_prioritized"))) %>%
     left_join(qc_counts2, by = "sample")
 
   list(
     cohort_summary = cohort_summary,
     meta = meta,
     gs_long = gs_long,
-    tax_features = tax_features,
-    sample_priors = sample_priors
+    tax_features = tax_features
   )
 }
 
@@ -2404,22 +2545,24 @@ build_display_taxa_table <- function(gs, show_fp_breakdown = FALSE) {
   if (isTRUE(show_fp_breakdown)) {
     base_cols <- c(
       base_cols,
-      "fp_comp_low_reads",
-      "fp_comp_low_rpmm",
-      "fp_comp_low_kmer",
-      "fp_comp_ref_bg",
-      "fp_comp_ref_prev",
-      "fp_comp_fc_ref",
-      "fp_comp_ctrl_enrich",
-      "fp_comp_ctrl_prev",
-      "fp_comp_cohort_prev",
-      "fp_comp_common_bg",
-      "fp_comp_ubiq",
-      "fp_comp_biomass",
-      "fp_comp_nonmicrobe_corr",
-      "fp_comp_decon",
-      "fp_comp_decon_ratio",
-      "fp_comp_ambig"
+      "score_contrib_reads_support",
+      "score_contrib_rpmm_support",
+      "score_contrib_uniq_kmer_support",
+      "score_contrib_ambiguity_species_nondominance",
+      "score_contrib_reference_prevalence",
+      "score_contrib_reference_median_abundance",
+      "score_contrib_reference_relative_abundance",
+      "score_contrib_reference_at_or_below_q99",
+      "score_contrib_reference_at_or_below_q95",
+      "score_contrib_reference_at_or_below_q50",
+      "score_contrib_decontaminated_abundance",
+      "score_contrib_decontamination_ratio",
+      "score_contrib_kitome_clinical_overlap",
+      "score_contrib_clinical_membership",
+      "score_contrib_clinical_x_decon_support",
+      "score_contrib_kitome_only_x_decon_support",
+      "score_contrib_reference_prevalence_x_low_enrichment",
+      "score_contrib_unresolved_ambiguity_x_kmer_support"
     )
   }
 
@@ -2443,9 +2586,6 @@ save_tables <- function(result, out_dir, show_fp_breakdown = FALSE) {
               sep = "\t", quote = FALSE, row.names = FALSE)
   write.table(result$tax_features,
               file = file.path(tables_dir, "tax_features.tsv"),
-              sep = "\t", quote = FALSE, row.names = FALSE)
-  write.table(result$sample_priors,
-              file = file.path(tables_dir, "sample_priors.tsv"),
               sep = "\t", quote = FALSE, row.names = FALSE)
 
   prev_df <- make_prevalence_abundance_df(
@@ -2482,7 +2622,6 @@ save_tables <- function(result, out_dir, show_fp_breakdown = FALSE) {
       cohort_summary = result$cohort_summary,
       sample_metadata = result$meta,
       tax_features = result$tax_features,
-      sample_priors = result$sample_priors,
       prevalence_abundance = prev_df
     ),
     path = workbook_path
@@ -2579,9 +2718,9 @@ save_heatmap_plot <- function(result, file_path, title_prefix = "") {
   gs <- result$gs_long %>%
     filter(rank == tax_level, call != "Non-microbial / Host", is.finite(rpmm))
 
-  focus <- gs %>% filter(call %in% c("Likely true"))
+  focus <- gs %>% filter(call %in% c("Prioritized"))
   if (nrow(focus) == 0) {
-    focus <- gs %>% filter(call != "Likely false positive / background")
+    focus <- gs %>% filter(call != "Not prioritized")
   }
 
   p <- if (nrow(focus) == 0) {
@@ -2689,7 +2828,7 @@ save_fp_by_call_plot <- function(result, file_path, title_suffix = "") {
 
 save_top_taxa_plot <- function(result, sample_name, file_path) {
   tax_level <- result$params$tax_level %||% "S"
-  sel_calls <- c("Likely true", "Uncertain")
+  sel_calls <- c("Prioritized", "Not prioritized")
 
   gs <- result$gs_long %>%
     filter(sample == sample_name, rank == tax_level, call %in% sel_calls, is.finite(rpmm))
@@ -2706,9 +2845,8 @@ save_top_taxa_plot <- function(result, sample_name, file_path) {
     topn <- gs %>%
       mutate(
         call_priority = dplyr::case_when(
-          call == "Likely true" ~ 1L,
-          call == "Uncertain" ~ 2L,
-          call == "Likely false positive / background" ~ 3L,
+          call == "Prioritized" ~ 1L,
+          call == "Not prioritized" ~ 2L,
           TRUE ~ 4L
         )
       ) %>%
@@ -2757,7 +2895,7 @@ save_fp_scatter_plot <- function(result, sample_name, file_path) {
 
 save_radar_plot <- function(result, sample_name, file_path, n_show = 5) {
   tax_level <- result$params$tax_level %||% "S"
-  sel_calls <- c("Likely true", "Uncertain")
+  sel_calls <- c("Prioritized", "Not prioritized")
   n_show <- max(3, min(10, as.integer(n_show)))
 
   png(file_path, width = 2200, height = 1800, res = 250)
@@ -2868,7 +3006,7 @@ save_all_plots <- function(result, out_dir, prefix = NULL) {
   }
 }
 
-write_cleaned_reports <- function(result, out_dir, quick = c("false", "unc"),
+write_cleaned_reports <- function(result, out_dir,
                                   protected_taxa_map = list(), keep_descendants = FALSE) {
   cleaned_dir <- file.path(out_dir, "cleaned_reports")
   dir.create(cleaned_dir, recursive = TRUE, showWarnings = FALSE)
@@ -2884,7 +3022,6 @@ write_cleaned_reports <- function(result, out_dir, quick = c("false", "unc"),
     cleaned <- build_cleaned_report_for_sample(
       raw_df = raw_df,
       gs = gs_samp,
-      quick = quick,
       protected_taxa = protected_taxa,
       keep_descendants = keep_descendants
     )
@@ -2960,13 +3097,11 @@ main <- function() {
   save_run_summary(result = result, out_dir = output_dir, args = args, label = "original")
 
   protected_taxa_map <- load_protected_taxa_map(args$protected_taxa_tsv %||% "")
-  quick_remove <- split_csv(args$quick_remove %||% "false,unc")
   keep_descendants <- parse_bool(args$keep_descendants, FALSE)
 
   cleaned_files <- write_cleaned_reports(
     result = result,
     out_dir = output_dir,
-    quick = quick_remove,
     protected_taxa_map = protected_taxa_map,
     keep_descendants = keep_descendants
   )
