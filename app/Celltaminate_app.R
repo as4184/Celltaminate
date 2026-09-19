@@ -2454,10 +2454,10 @@ ui <- fluidPage(
       .celltaminate-subtitle { font-size: 18px; font-weight: 600; color: #555; margin-bottom: 8px; }
       .subtle { color: #444; }
       .call-pill { padding: 2px 8px; border-radius: 12px; font-size: 12px; display: inline-block; }
-      .pill-true { background: #e6f4ea; }
-      .pill-cont { background: #fdecea; }
+      .pill-prioritized { background: #e6f4ea; }
+      .pill-not-prioritized { background: #fdecea; }
       .pill-low { background: #fff4e5; }
-      .pill-unc { background: #eef2ff; }
+
       .pill-host { background: #f3f4f6; }
       .small-note { font-size: 12px; color: #666; }
       .intro-card { background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px; min-height: 130px; margin-bottom: 12px; }
@@ -4316,12 +4316,11 @@ server <- function(input, output, session) {
           if (nrow(cs) == 0) return(NULL)
 
           n_prioritized <- cs$n_prioritized %||% 0
-          n_cont <- cs$n_not_prioritized %||% 0
-          n_unc <- cs$n_not_prioritized %||% 0
+          n_not_prioritized <- cs$n_not_prioritized %||% 0
 
           pills <- tagList(
-            span(class = "call-pill pill-true", paste0("Prioritized: ", n_prioritized)),
-            span(style = "margin-left:8px;", class = "call-pill pill-cont", paste0("Not prioritized: ", n_cont))
+            span(class = "call-pill pill-prioritized", paste0("Prioritized: ", n_prioritized)),
+            span(style = "margin-left:8px;", class = "call-pill pill-not-prioritized", paste0("Not prioritized: ", n_not_prioritized))
           )
 
           tagList(
