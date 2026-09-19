@@ -21,7 +21,7 @@ bash examples/lung_nanopore/run_example.sh
 ## 4. Run your own Kraken reports
 
 ```bash
-Rscript bin/celltaminate run \
+bin/celltaminate run \
   --reports sample1.kraken.report.txt sample2.kraken.report.txt \
   --outdir celltaminate_results
 ```
@@ -31,5 +31,5 @@ Metadata are optional. Supply `--metadata metadata.tsv` when group or sample-typ
 ## 5. Launch the Shiny application
 
 ```bash
-Rscript bin/celltaminate app
+bin/celltaminate app
 ```
