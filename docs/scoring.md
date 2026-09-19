@@ -1,8 +1,8 @@
 # Score interpretation
 
-Celltaminate reports a score from 0 to 100 for each retained genus- or species-level taxon. Lower scores indicate stronger support for prioritization, whereas higher scores indicate stronger background-like evidence.
+Celltaminate reports a score from 0 to 100 for each genus or species-level taxon. Lower scores indicate stronger support for prioritization, whereas higher scores indicate stronger support for contaminant or technical artifact.
 
-The deployed model integrates retained terms from abundance, unique k-mer support, taxonomic ambiguity, sterile-reference background, decontamination, curated clinical-pathogen and kitome/background membership, and selected interactions between these evidence layers.
+Celltaminate integrates features from taxonomy reports (e.g., Kraken2, KrakenUniq) such as abundance, unique k-mer support, taxonomic ambiguity, sterile-reference background, decontamination, curated clinical-pathogen and kitome membership, and selected interactions among these features.
 
 The default operating rule is:
 
@@ -21,5 +21,3 @@ bin/celltaminate run \
   --outdir results \
   --fp-true-cutoff 1
 ```
-
-The Celltaminate score is a logistic mapping of the fitted regularized model and should not be interpreted as a calibrated probability.
