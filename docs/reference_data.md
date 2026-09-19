@@ -1,8 +1,8 @@
 # Reference data
 
-Celltaminate uses a processed reference background derived from sterile human cell-line sequencing experiments. The source resource contains 2,491 sterile experiments, and the processed reference table used by the current implementation contains 1,040 unique sample identifiers.
+Celltaminate uses a reference background dataset derived from sterile human cell-line sequencing experiments that contains 1,040 unique sample identifiers. This dataset is the same that we used in SAHMI (https://github.com/sjdlabgroup/SAHMI)
 
-The expected columns are:
+Format of the reference dataset file:
 
 ```text
 sample	rank	taxid	name	reads	min	uniq	rpm	rpmm
@@ -20,7 +20,7 @@ Download it to the default location with:
 bin/celltaminate download-reference
 ```
 
-or provide an explicit file at run time:
+or provide a customized control dataset at run time:
 
 ```bash
 bin/celltaminate run \
