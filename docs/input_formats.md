@@ -13,11 +13,9 @@ sample1.kraken.report.txt
 sample2.kraken.report.txt
 ```
 
-Relative paths are interpreted relative to the input-list location.
-
 ## Metadata
 
-Metadata are optional and tab-separated:
+Metadata is optional and has to be a tab-separated file if provided:
 
 ```text
 sample	group	sample_type
@@ -27,6 +25,6 @@ sample2.kraken.report.txt	Case	Nanopore
 
 Columns:
 
-- `sample`: report basename;
+- `sample`: basename of a report;
 - `group`: biological or study group;
-- `sample_type`: sample or sequencing description.
+- `sample_type`: sample or sequencing category.
