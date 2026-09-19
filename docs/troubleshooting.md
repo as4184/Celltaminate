@@ -20,7 +20,7 @@ Kraken2 6-column reports can be processed, but 8-column Kraken2 reports with min
 
 ## The Shiny application cannot find the curated panels
 
-Launch the application through `bin/celltaminate app`. The launcher and application resolve the bundled files from the repository automatically.
+Launch the application through `bin/celltaminate app`. The launcher and application automatically resolve the required files from the repository.
 
 ## R packages are missing
 
